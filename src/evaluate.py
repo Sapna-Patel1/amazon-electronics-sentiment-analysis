@@ -10,10 +10,9 @@ Usage:
 """
 
 import torch
-import numpy as np
 import pandas as pd
 from pathlib import Path
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+from transformers import AutoTokenizer, pipeline
 from sklearn.metrics import (
     accuracy_score,
     f1_score,

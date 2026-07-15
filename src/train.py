@@ -9,7 +9,6 @@ Usage:
     python src/train.py
 """
 
-import yaml
 import torch
 import numpy as np
 from torch.utils.data import Dataset as TorchDataset
@@ -23,6 +22,9 @@ from transformers import (
 from sklearn.metrics import accuracy_score, f1_score
 
 from data_loader import load_processed_data, split_data
+from utils import load_config
+
+SENTIMENT_LABELS = [0, 1, 2]
 
 
 class ReviewDataset(TorchDataset):
@@ -36,11 +38,12 @@ class ReviewDataset(TorchDataset):
     """
 
     def __init__(self, texts, labels, tokenizer, max_length):
-        """Tokenize all texts upfront and store encodings and labels."""
-        self.encodings = tokenizer(
+        """Tokenize all texts upfront and pre-convert encodings to tensors."""
+        encodings = tokenizer(
             texts, truncation=True, max_length=max_length, padding=False
         )
-        self.labels = labels
+        self.encodings = {k: torch.tensor(v) for k, v in encodings.items()}
+        self.labels = torch.tensor(labels)
 
     def __len__(self):
         """Return the number of samples in the dataset."""
@@ -48,22 +51,9 @@ class ReviewDataset(TorchDataset):
 
     def __getitem__(self, idx):
         """Return a single tokenized sample with its label as tensors."""
-        item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
-        item["labels"] = torch.tensor(self.labels[idx])
+        item = {k: v[idx] for k, v in self.encodings.items()}
+        item["labels"] = self.labels[idx]
         return item
-
-
-def load_config(path: str = "configs/bert_config.yaml") -> dict:
-    """Load training configuration from a YAML file.
-
-    Args:
-        path: Path to the YAML config file.
-
-    Returns:
-        Dictionary of configuration values.
-    """
-    with open(path) as f:
-        return yaml.safe_load(f)
 
 
 def compute_metrics(eval_pred) -> dict:
@@ -85,7 +75,7 @@ def compute_metrics(eval_pred) -> dict:
         "accuracy": accuracy_score(labels, preds),
         "f1_macro": f1_score(labels, preds, average="macro"),
         "f1_weighted": f1_score(labels, preds, average="weighted"),
-        "f1_neutral": f1_score(labels, preds, average=None)[1],
+        "f1_neutral": f1_score(labels, preds, labels=SENTIMENT_LABELS, average=None)[1],
     }
 
 
@@ -95,10 +85,11 @@ def main():
     model_name = cfg["model"]["name"]
     max_length = cfg["model"]["max_length"]
     t = cfg["training"]
+    seed = t["seed"]
 
     print(f"Loading data from {cfg['data']['processed_path']}...")
     df = load_processed_data(cfg["data"]["processed_path"])
-    train_df, val_df, _ = split_data(df, seed=cfg["data"]["seed"])
+    train_df, val_df, _ = split_data(df, seed=seed)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -126,7 +117,7 @@ def main():
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="f1_macro",
-        seed=cfg["data"]["seed"],
+        seed=seed,
         report_to="none",
     )
 

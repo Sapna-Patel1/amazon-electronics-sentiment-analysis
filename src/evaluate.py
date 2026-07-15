@@ -9,7 +9,7 @@ Usage:
     python src/evaluate.py
 """
 
-import yaml
+import torch
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -22,30 +22,24 @@ from sklearn.metrics import (
 )
 
 from data_loader import load_processed_data, split_data
+from utils import load_config
 
 LABEL_NAMES = ["negative", "neutral", "positive"]
 
 
-def load_config(path: str = "configs/bert_config.yaml") -> dict:
-    """Load evaluation configuration from a YAML file.
-
-    Args:
-        path: Path to the YAML config file.
-
-    Returns:
-        Dictionary of configuration values.
-    """
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-
-def evaluate_model(model_dir: str, test_df: pd.DataFrame, max_length: int = 256) -> dict:
+def evaluate_model(
+    model_dir: str,
+    test_df: pd.DataFrame,
+    max_length: int = 256,
+    batch_size: int = 16,
+) -> dict:
     """Run inference on the test set and compute evaluation metrics.
 
     Args:
         model_dir: Path to the directory containing the saved model and tokenizer.
         test_df: DataFrame with 'input_text' and 'label' columns.
         max_length: Maximum token length for truncation.
+        batch_size: Batch size for pipeline inference.
 
     Returns:
         Dictionary containing:
@@ -63,13 +57,13 @@ def evaluate_model(model_dir: str, test_df: pd.DataFrame, max_length: int = 256)
         tokenizer=tokenizer,
         truncation=True,
         max_length=max_length,
-        device=0 if __import__("torch").cuda.is_available() else -1,
+        device=0 if torch.cuda.is_available() else -1,
     )
 
     texts = test_df["input_text"].tolist()
     true_labels = test_df["label"].tolist()
 
-    raw_preds = clf(texts, batch_size=32)
+    raw_preds = clf(texts, batch_size=batch_size)
     pred_labels = [int(p["label"].split("_")[-1]) for p in raw_preds]
 
     report = classification_report(true_labels, pred_labels, target_names=LABEL_NAMES)
@@ -89,12 +83,17 @@ def main():
     """Load the trained model, evaluate on the test set, and save results."""
     cfg = load_config()
     df = load_processed_data(cfg["data"]["processed_path"])
-    _, _, test_df = split_data(df, seed=cfg["data"]["seed"])
+    _, _, test_df = split_data(df, seed=cfg["training"]["seed"])
 
     model_dir = cfg["outputs"]["model_dir"]
     print(f"Evaluating model from {model_dir} on {len(test_df):,} test samples...")
 
-    results = evaluate_model(model_dir, test_df, cfg["model"]["max_length"])
+    results = evaluate_model(
+        model_dir,
+        test_df,
+        max_length=cfg["model"]["max_length"],
+        batch_size=cfg["training"]["batch_size"],
+    )
 
     print(f"\nAccuracy:    {results['accuracy']:.4f}")
     print(f"F1 Macro:    {results['f1_macro']:.4f}")

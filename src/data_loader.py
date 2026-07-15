@@ -12,22 +12,15 @@ from sklearn.model_selection import train_test_split
 
 
 LABEL_MAP = {1: "negative", 2: "negative", 3: "neutral", 4: "positive", 5: "positive"}
-
-
-def assign_sentiment_label(rating: int) -> str:
-    """Map a star rating (1–5) to a sentiment string.
-
-    Args:
-        rating: Integer star rating from 1 to 5.
-
-    Returns:
-        One of 'negative', 'neutral', or 'positive'.
-    """
-    return LABEL_MAP[rating]
+RATING_TO_LABEL = {1: 0, 2: 0, 3: 1, 4: 2, 5: 2}
+VALID_RATINGS = set(LABEL_MAP.keys())
 
 
 def load_processed_data(path: str = "data/processed_reviews.csv.gz") -> pd.DataFrame:
     """Load the processed reviews CSV and add sentiment label columns.
+
+    Drops any rows whose rating is outside the expected 1–5 range to prevent
+    KeyError during label mapping.
 
     Adds three columns to the DataFrame:
     - ``sentiment``: string label ('negative', 'neutral', 'positive')
@@ -41,8 +34,12 @@ def load_processed_data(path: str = "data/processed_reviews.csv.gz") -> pd.DataF
         DataFrame with original columns plus the three new label columns.
     """
     df = pd.read_csv(path, compression="gzip")
-    df["sentiment"] = df["rating"].map(assign_sentiment_label)
-    df["label"] = df["sentiment"].map({"negative": 0, "neutral": 1, "positive": 2})
+    invalid = ~df["rating"].isin(VALID_RATINGS)
+    if invalid.any():
+        print(f"Warning: dropping {invalid.sum()} rows with invalid ratings.")
+        df = df[~invalid].reset_index(drop=True)
+    df["sentiment"] = df["rating"].map(LABEL_MAP)
+    df["label"] = df["rating"].map(RATING_TO_LABEL)
     df["input_text"] = df["review_title"].fillna("") + " " + df["text"].fillna("")
     df["input_text"] = df["input_text"].str.strip()
     return df

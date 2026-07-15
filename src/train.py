@@ -3,7 +3,7 @@
 import yaml
 import torch
 import numpy as np
-from pathlib import Path
+from torch.utils.data import Dataset as TorchDataset
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
@@ -11,23 +11,30 @@ from transformers import (
     Trainer,
     DataCollatorWithPadding,
 )
-from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score
 
 from data_loader import load_processed_data, split_data
 
 
+class ReviewDataset(TorchDataset):
+    def __init__(self, texts, labels, tokenizer, max_length):
+        self.encodings = tokenizer(
+            texts, truncation=True, max_length=max_length, padding=False
+        )
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
+        item["labels"] = torch.tensor(self.labels[idx])
+        return item
+
+
 def load_config(path: str = "configs/bert_config.yaml") -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
-
-
-def tokenize(examples, tokenizer, max_length):
-    return tokenizer(
-        examples["input_text"],
-        truncation=True,
-        max_length=max_length,
-    )
 
 
 def compute_metrics(eval_pred):
@@ -53,11 +60,12 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    def _tokenize(examples):
-        return tokenize(examples, tokenizer, max_length)
-
-    train_ds = Dataset.from_pandas(train_df[["input_text", "label"]]).map(_tokenize, batched=True)
-    val_ds = Dataset.from_pandas(val_df[["input_text", "label"]]).map(_tokenize, batched=True)
+    train_ds = ReviewDataset(
+        train_df["input_text"].tolist(), train_df["label"].tolist(), tokenizer, max_length
+    )
+    val_ds = ReviewDataset(
+        val_df["input_text"].tolist(), val_df["label"].tolist(), tokenizer, max_length
+    )
 
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name, num_labels=cfg["model"]["num_labels"]

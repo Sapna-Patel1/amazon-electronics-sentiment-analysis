@@ -1,4 +1,13 @@
-"""Evaluate BERT sentiment classifier on the test set."""
+"""
+Evaluate a fine-tuned BERT sentiment classifier on the held-out test set.
+
+Loads the saved model from models/bert_sentiment/, runs inference on the
+test split, and reports accuracy, per-class F1, confusion matrix, and a
+full classification report. Results are saved to outputs/evaluation_results.txt.
+
+Usage:
+    python src/evaluate.py
+"""
 
 import yaml
 import numpy as np
@@ -8,8 +17,6 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipe
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
-    precision_score,
-    recall_score,
     classification_report,
     confusion_matrix,
 )
@@ -20,11 +27,35 @@ LABEL_NAMES = ["negative", "neutral", "positive"]
 
 
 def load_config(path: str = "configs/bert_config.yaml") -> dict:
+    """Load evaluation configuration from a YAML file.
+
+    Args:
+        path: Path to the YAML config file.
+
+    Returns:
+        Dictionary of configuration values.
+    """
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 def evaluate_model(model_dir: str, test_df: pd.DataFrame, max_length: int = 256) -> dict:
+    """Run inference on the test set and compute evaluation metrics.
+
+    Args:
+        model_dir: Path to the directory containing the saved model and tokenizer.
+        test_df: DataFrame with 'input_text' and 'label' columns.
+        max_length: Maximum token length for truncation.
+
+    Returns:
+        Dictionary containing:
+        - ``accuracy``: Overall accuracy score.
+        - ``f1_macro``: Macro-averaged F1 across all three classes.
+        - ``f1_weighted``: Weighted-averaged F1.
+        - ``f1_per_class``: List of per-class F1 scores [negative, neutral, positive].
+        - ``classification_report``: Full sklearn classification report string.
+        - ``confusion_matrix``: Confusion matrix as a nested list.
+    """
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     clf = pipeline(
         "text-classification",
@@ -39,13 +70,12 @@ def evaluate_model(model_dir: str, test_df: pd.DataFrame, max_length: int = 256)
     true_labels = test_df["label"].tolist()
 
     raw_preds = clf(texts, batch_size=32)
-    id2label = {0: "LABEL_0", 1: "LABEL_1", 2: "LABEL_2"}
     pred_labels = [int(p["label"].split("_")[-1]) for p in raw_preds]
 
     report = classification_report(true_labels, pred_labels, target_names=LABEL_NAMES)
     cm = confusion_matrix(true_labels, pred_labels)
 
-    results = {
+    return {
         "accuracy": accuracy_score(true_labels, pred_labels),
         "f1_macro": f1_score(true_labels, pred_labels, average="macro"),
         "f1_weighted": f1_score(true_labels, pred_labels, average="weighted"),
@@ -53,10 +83,10 @@ def evaluate_model(model_dir: str, test_df: pd.DataFrame, max_length: int = 256)
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
     }
-    return results
 
 
 def main():
+    """Load the trained model, evaluate on the test set, and save results."""
     cfg = load_config()
     df = load_processed_data(cfg["data"]["processed_path"])
     _, _, test_df = split_data(df, seed=cfg["data"]["seed"])

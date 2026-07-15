@@ -1,4 +1,13 @@
-"""Fine-tune BERT for 3-class sentiment classification."""
+"""
+Fine-tune BERT for 3-class sentiment classification.
+
+Loads the processed reviews dataset, tokenizes inputs, and fine-tunes
+bert-base-uncased using the Hugging Face Trainer API. Hyperparameters
+and paths are read from configs/bert_config.yaml.
+
+Usage:
+    python src/train.py
+"""
 
 import yaml
 import torch
@@ -17,27 +26,59 @@ from data_loader import load_processed_data, split_data
 
 
 class ReviewDataset(TorchDataset):
+    """PyTorch Dataset for tokenized review text and sentiment labels.
+
+    Args:
+        texts: List of input strings (review_title + review text).
+        labels: List of integer labels (0=negative, 1=neutral, 2=positive).
+        tokenizer: Hugging Face tokenizer instance.
+        max_length: Maximum token length for truncation.
+    """
+
     def __init__(self, texts, labels, tokenizer, max_length):
+        """Tokenize all texts upfront and store encodings and labels."""
         self.encodings = tokenizer(
             texts, truncation=True, max_length=max_length, padding=False
         )
         self.labels = labels
 
     def __len__(self):
+        """Return the number of samples in the dataset."""
         return len(self.labels)
 
     def __getitem__(self, idx):
+        """Return a single tokenized sample with its label as tensors."""
         item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
         item["labels"] = torch.tensor(self.labels[idx])
         return item
 
 
 def load_config(path: str = "configs/bert_config.yaml") -> dict:
+    """Load training configuration from a YAML file.
+
+    Args:
+        path: Path to the YAML config file.
+
+    Returns:
+        Dictionary of configuration values.
+    """
     with open(path) as f:
         return yaml.safe_load(f)
 
 
-def compute_metrics(eval_pred):
+def compute_metrics(eval_pred) -> dict:
+    """Compute accuracy and F1 scores from model predictions.
+
+    Tracks overall accuracy, macro-F1, weighted-F1, and neutral-class F1
+    separately (neutral is the minority class and key indicator of class-
+    balance quality per RQ2).
+
+    Args:
+        eval_pred: Tuple of (logits, labels) from the Trainer.
+
+    Returns:
+        Dictionary with accuracy, f1_macro, f1_weighted, and f1_neutral.
+    """
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
     return {
@@ -49,6 +90,7 @@ def compute_metrics(eval_pred):
 
 
 def main():
+    """Run the full BERT fine-tuning pipeline and save the trained model."""
     cfg = load_config()
     model_name = cfg["model"]["name"]
     max_length = cfg["model"]["max_length"]

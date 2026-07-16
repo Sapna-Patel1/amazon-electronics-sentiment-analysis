@@ -1,0 +1,26 @@
+model:
+  name: bert-base-uncased
+  num_labels: 3
+  max_length: 256
+
+training:
+  learning_rate: 2e-5
+  batch_size: 16
+  num_epochs: 3
+  warmup_steps: 500
+  weight_decay: 0.01
+  seed: 42
+
+data:
+  processed_path: data/processed_reviews.csv.gz
+  train_split: 0.70
+  val_split: 0.15
+  test_split: 0.15
+  label_map:
+    negative: 0
+    neutral: 1
+    positive: 2
+
+outputs:
+  model_dir: models/bert_sentiment
+  results_dir: outputs/

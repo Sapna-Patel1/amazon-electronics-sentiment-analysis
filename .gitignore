@@ -219,3 +219,14 @@ __marimo__/
 
 # macOS
 .DS_Store
+
+# Model checkpoints and large files
+models/bert_sentiment/
+models/*.bin
+models/*.pt
+models/*.safetensors
+*.jsonl.gz
+
+# Outputs (keep directory, ignore contents except .gitkeep)
+outputs/*
+!outputs/.gitkeep

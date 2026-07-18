@@ -5,20 +5,31 @@ import pandas as pd
 # Splitting the data into test and validation sets
 from sklearn.model_selection import train_test_split
 
-# Create a function to assign sentiment labels
-def get_sentiment(rating):
+# Mapping from star rating to integer label used by BERT (0=negative, 1=neutral, 2=positive)
+RATING_TO_LABEL = {1: 0, 2: 0, 3: 1, 4: 2, 5: 2}
 
+
+def get_sentiment(rating):
+    """Convert a numeric star rating to a lowercase sentiment string.
+
+    Args:
+        rating: Integer star rating (1-5).
+
+    Returns:
+        "negative" for ratings below 3, "neutral" for 3, "positive" above 3.
+    """
     # Ratings below 3 are negative
     if rating < 3:
-        return "Negative"
+        return "negative"
 
     # A rating of 3 is neutral
     elif rating == 3:
-        return "Neutral"
+        return "neutral"
 
     # Ratings above 3 are positive
     else:
-        return "Positive"
+        return "positive"
+
 
 # Split the dataset into training, validation, and testing sets
 def split_data(
@@ -27,7 +38,18 @@ def split_data(
     val_size: float = 0.15,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Split a DataFrame into stratified train, validation, and test sets.
 
+    Args:
+        df: Full labeled DataFrame (must contain a 'label' column).
+        train_size: Fraction of data for training (default 0.70).
+        val_size: Fraction of data for validation (default 0.15).
+            The test set receives the remaining fraction (default 0.15).
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Tuple of (train_df, val_df, test_df), each reset-indexed.
+    """
     # Calculate the percentage of data for the testing set
     test_size = 1.0 - train_size - val_size
 
@@ -36,7 +58,7 @@ def split_data(
         df,
         test_size=(val_size + test_size),
         random_state=seed,
-        stratify=df["sentiment"]
+        stratify=df["label"]
     )
 
     # Calculate the validation size relative to the temporary dataset
@@ -47,7 +69,7 @@ def split_data(
         temp_df,
         test_size=(1.0 - relative_val),
         random_state=seed,
-        stratify=temp_df["sentiment"]
+        stratify=temp_df["label"]
     )
 
     return (
@@ -57,7 +79,14 @@ def split_data(
     )
 
 def preprocess_data():
+    """Merge, clean, label, and split the raw review and metadata samples.
 
+    Reads the sample CSVs produced by data_loader.py, merges them on
+    parent_asin, removes duplicates and rows with missing review text,
+    creates sentiment and integer label columns, builds the input_text field
+    used by BERT, and saves the preprocessed dataset plus train/val/test
+    splits to data/processed/.
+    """
     # Load the already-filtered sample datasets
     metadata_df = pd.read_csv("data/raw/metadata_sample.csv")
     reviews_df = pd.read_csv("data/raw/reviews_sample.csv")
@@ -111,9 +140,12 @@ def preprocess_data():
         .str.replace(r"\s+", " ", regex=True) # Replace multiple spaces with a single space
     )
 
-    # Combine the review title and review text into one column
-    merged_df["review"] = (
-        merged_df["review_title"] + ". " + merged_df["text"]
+    # Combine the review title and review text into one column.
+    # When the title is empty, omit the separator so the result is not ". text".
+    merged_df["review"] = merged_df.apply(
+        lambda row: row["text"] if row["review_title"] == ""
+        else row["review_title"] + ". " + row["text"],
+        axis=1,
     )
 
     # Remove extra spaces after combining the text
@@ -123,8 +155,16 @@ def preprocess_data():
         .str.replace(r"\s+", " ", regex=True)
     )
 
-    # Create the sentiment column
+    # Create the lowercase sentiment column (negative / neutral / positive)
     merged_df["sentiment"] = merged_df["rating"].apply(get_sentiment)
+
+    # Create the integer label column required by BERT (0=negative, 1=neutral, 2=positive)
+    merged_df["label"] = merged_df["rating"].map(RATING_TO_LABEL)
+
+    # Create the input_text column used by train.py (title + space + body)
+    merged_df["input_text"] = (
+        merged_df["review_title"].fillna("") + " " + merged_df["text"].fillna("")
+    ).str.strip()
 
     # Check the sentiment distribution
     print("\nSentiment Distribution")

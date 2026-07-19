@@ -8,7 +8,7 @@ model:
   no_repeat_ngram_size: 3
 
 data:
-  processed_path: data/processed_reviews.csv.gz
+  processed_path: data/processed/preprocessed_reviews.csv
   product_column: parent_asin
   product_title_column: product_title
   review_title_column: review_title

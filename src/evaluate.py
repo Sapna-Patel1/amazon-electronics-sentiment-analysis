@@ -22,8 +22,7 @@ from sklearn.metrics import (
 
 from data_loader import load_processed_data
 from utils import load_config
-
-LABEL_NAMES = ["negative", "neutral", "positive"]
+from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS
 
 
 def evaluate_model(
@@ -48,7 +47,24 @@ def evaluate_model(
         - ``f1_per_class``: List of per-class F1 scores [negative, neutral, positive].
         - ``classification_report``: Full sklearn classification report string.
         - ``confusion_matrix``: Confusion matrix as a nested list.
+
+    Raises:
+        FileNotFoundError: If model_dir doesn't exist (e.g. train.py hasn't
+            been run yet).
     """
+    if not Path(model_dir).is_dir():
+        raise FileNotFoundError(
+            f"Model directory '{model_dir}' does not exist. "
+            "Run `python src/train.py` first to produce a trained model."
+        )
+
+    if torch.cuda.is_available():
+        device = 0
+    elif torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = -1
+
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     clf = pipeline(
         "text-classification",
@@ -56,7 +72,7 @@ def evaluate_model(
         tokenizer=tokenizer,
         truncation=True,
         max_length=max_length,
-        device=0 if torch.cuda.is_available() else -1,
+        device=device,
     )
 
     texts = test_df["input_text"].tolist()
@@ -65,14 +81,16 @@ def evaluate_model(
     raw_preds = clf(texts, batch_size=batch_size)
     pred_labels = [int(p["label"].split("_")[-1]) for p in raw_preds]
 
-    report = classification_report(true_labels, pred_labels, target_names=LABEL_NAMES)
-    cm = confusion_matrix(true_labels, pred_labels)
+    report = classification_report(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, target_names=LABEL_NAMES
+    )
+    cm = confusion_matrix(true_labels, pred_labels, labels=SENTIMENT_LABELS)
 
     return {
         "accuracy": accuracy_score(true_labels, pred_labels),
-        "f1_macro": f1_score(true_labels, pred_labels, average="macro"),
-        "f1_weighted": f1_score(true_labels, pred_labels, average="weighted"),
-        "f1_per_class": f1_score(true_labels, pred_labels, average=None).tolist(),
+        "f1_macro": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
+        "f1_weighted": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted"),
+        "f1_per_class": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
     }

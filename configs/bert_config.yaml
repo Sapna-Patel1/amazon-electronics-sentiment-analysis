@@ -16,13 +16,6 @@ data:
   train_path: data/processed/train.csv
   val_path: data/processed/validation.csv
   test_path: data/processed/test.csv
-  train_split: 0.70
-  val_split: 0.15
-  test_split: 0.15
-  label_map:
-    negative: 0
-    neutral: 1
-    positive: 2
 
 outputs:
   model_dir: models/bert_sentiment

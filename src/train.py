@@ -23,8 +23,7 @@ from sklearn.metrics import accuracy_score, f1_score
 
 from data_loader import load_processed_data
 from utils import load_config
-
-SENTIMENT_LABELS = [0, 1, 2]
+from utils.helpers import SENTIMENT_LABELS
 
 
 class ReviewDataset(TorchDataset):
@@ -72,8 +71,8 @@ def compute_metrics(eval_pred) -> dict:
     preds = np.argmax(logits, axis=-1)
     return {
         "accuracy": accuracy_score(labels, preds),
-        "f1_macro": f1_score(labels, preds, average="macro"),
-        "f1_weighted": f1_score(labels, preds, average="weighted"),
+        "f1_macro": f1_score(labels, preds, labels=SENTIMENT_LABELS, average="macro"),
+        "f1_weighted": f1_score(labels, preds, labels=SENTIMENT_LABELS, average="weighted"),
         "f1_neutral": f1_score(labels, preds, labels=SENTIMENT_LABELS, average=None)[1],
     }
 

@@ -4,7 +4,7 @@ model:
   max_length: 256
 
 training:
-  learning_rate: 2e-5
+  learning_rate: 2.0e-5
   batch_size: 16
   num_epochs: 3
   warmup_steps: 500

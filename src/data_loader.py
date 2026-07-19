@@ -3,7 +3,8 @@
 
 # Import the pandas library to convert the raw data into a dataframe
 import pandas as pd
-from sklearn.model_selection import train_test_split
+
+from utils import load_config
 
 
 def load_metadata(sample_size=10000, chunksize=50000):
@@ -85,17 +86,20 @@ def load_metadata(sample_size=10000, chunksize=50000):
     return metadata_df
 
 
-def load_reviews(product_ids, sample_size=50000, chunksize=50000):
+def load_reviews(product_ids, sample_size=50000, chunksize=50000, min_reviews_per_product=10):
     """Load and filter reviews for sampled products from the compressed JSONL file.
 
     Reads the raw reviews in chunks, keeps only reviews belonging to the
-    supplied product IDs, removes products with fewer than 10 reviews, and
-    returns a random sample up to sample_size.
+    supplied product IDs, keeps only products with more than
+    min_reviews_per_product reviews, and returns a random sample up to
+    sample_size.
 
     Args:
         product_ids: Collection of parent_asin values to keep.
         sample_size: Maximum number of reviews to return (default 50,000).
         chunksize: Number of rows to read per chunk (default 50,000).
+        min_reviews_per_product: Products with more than this many reviews
+            are kept (default 10).
 
     Returns:
         Tuple of (reviews DataFrame, Index of valid product IDs).
@@ -157,9 +161,9 @@ def load_reviews(product_ids, sample_size=50000, chunksize=50000):
     # Count reviews for each product
     review_counts = reviews_df["parent_asin"].value_counts()
 
-    # Keep only products with more than 10 reviews
+    # Keep only products with more than min_reviews_per_product reviews
     valid_products = review_counts[
-        review_counts > 10
+        review_counts > min_reviews_per_product
     ].index
 
     # Filter reviews
@@ -220,42 +224,24 @@ def load_processed_data(path="data/processed/preprocessed_reviews.csv"):
     return pd.read_csv(path)
 
 
-def split_data(
-    df: pd.DataFrame,
-    train_size: float = 0.70,
-    val_size: float = 0.15,
-    seed: int = 42,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Split a DataFrame into stratified train, validation, and test sets.
-
-    Args:
-        df: Full labeled DataFrame (must contain a 'label' column).
-        train_size: Fraction of data for training (default 0.70).
-        val_size: Fraction of data for validation (default 0.15).
-            The test set receives the remaining fraction (default 0.15).
-        seed: Random seed for reproducibility.
-
-    Returns:
-        Tuple of (train_df, val_df, test_df), each reset-indexed.
-    """
-    test_size = 1.0 - train_size - val_size
-    train_df, temp_df = train_test_split(
-        df, test_size=(val_size + test_size), random_state=seed, stratify=df["label"]
-    )
-    relative_val = val_size / (val_size + test_size)
-    val_df, test_df = train_test_split(
-        temp_df, test_size=(1.0 - relative_val), random_state=seed, stratify=temp_df["label"]
-    )
-    return train_df.reset_index(drop=True), val_df.reset_index(drop=True), test_df.reset_index(drop=True)
-
-
 if __name__ == "__main__":
 
-    metadata_df = load_metadata()
+    cfg = load_config("configs/data_config.yaml")
+    sampling_cfg = cfg["sampling"]
+
+    metadata_df = load_metadata(
+        sample_size=sampling_cfg["metadata_sample_size"],
+        chunksize=sampling_cfg["chunksize"],
+    )
 
     product_ids = metadata_df["parent_asin"].unique()
 
-    reviews_df, valid_products = load_reviews(product_ids)
+    reviews_df, valid_products = load_reviews(
+        product_ids,
+        sample_size=sampling_cfg["review_sample_size"],
+        chunksize=sampling_cfg["chunksize"],
+        min_reviews_per_product=sampling_cfg["min_reviews_per_product"],
+    )
 
     metadata_df = metadata_df[
         metadata_df["parent_asin"].isin(valid_products)

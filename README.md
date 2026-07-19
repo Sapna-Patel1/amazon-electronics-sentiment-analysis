@@ -78,17 +78,27 @@ During preprocessing, reviews are assigned sentiment labels based on their origi
 ```
 amazon-electronics-sentiment-analysis/
 ├── data/
-│   ├── preprocessing.ipynb       # Data loading, cleaning, merging
-│   └── processed_reviews.csv.gz  # Cleaned subset (~276k reviews)
-├── experiments/
+│   ├── raw/                      # Sampled raw review/metadata CSVs
+│   └── processed/                # Cleaned dataset plus train/validation/test splits
+├── notebooks/
 │   └── eda.ipynb                 # Exploratory data analysis
+├── experiments/                  # Experimental notebooks and results
 ├── models/                       # Saved model checkpoints (git-ignored)
 ├── src/
-│   ├── data_loader.py            # Load processed data, assign labels, split
+│   ├── data_loader.py            # Sample raw review/metadata data
+│   ├── preprocess.py             # Clean, label, and split the sampled data
 │   ├── train.py                  # BERT fine-tuning script
-│   └── evaluate.py               # Evaluation: accuracy, F1, confusion matrix
+│   ├── evaluate.py               # Evaluation: accuracy, F1, confusion matrix
+│   ├── model_runner.py           # BART summarization pipeline
+│   ├── summarizer.py             # BART summary generation
+│   ├── summary_evaluation.py     # BART summary evaluation
+│   └── utils/
+│       ├── __init__.py           # load_config()
+│       └── helpers.py            # Shared text cleaning, label mapping, data splitting
 ├── configs/
-│   └── bert_config.yaml          # Hyperparameters and paths
+│   ├── data_config.yaml          # Sampling, split, and preprocessing settings
+│   ├── bert_config.yaml          # BERT hyperparameters and paths
+│   └── bart_config.yaml          # BART generation parameters and paths
 ├── outputs/                      # Generated summaries and evaluation results
 ├── docs/                         # Literature review and model documentation
 ├── requirements.txt
@@ -136,6 +146,16 @@ nltk.download('vader_lexicon')
 ## Configuration
 
 Project settings are stored in the `configs/` directory.
+
+### `data_config.yaml`
+
+Contains configuration for the data sampling and preprocessing pipeline (`data_loader.py`/`preprocess.py`), including:
+
+- metadata and review sample sizes
+- minimum reviews required per product
+- train/validation split ratios
+- minimum review length (short reviews are dropped)
+- random seed
 
 ### `bert_config.yaml`
 

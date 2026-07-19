@@ -41,6 +41,10 @@ def preprocess_data():
     # Remove reviews with missing review text
     merged_df = merged_df.dropna(subset=["text"])
 
+    # Remove reviews with a missing or out-of-range rating, since sentiment
+    # and label are derived directly from it
+    merged_df = merged_df[merged_df["rating"].isin([1, 2, 3, 4, 5])]
+
     # Replace missing review titles with an empty string
     merged_df["review_title"] = merged_df["review_title"].fillna("")
 

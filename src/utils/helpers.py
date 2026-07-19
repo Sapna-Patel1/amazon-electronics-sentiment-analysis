@@ -10,6 +10,10 @@ from sklearn.model_selection import train_test_split
 # Mapping from star rating to integer label used by BERT (0=negative, 1=neutral, 2=positive)
 RATING_TO_LABEL = {1: 0, 2: 0, 3: 1, 4: 2, 5: 2}
 
+# Canonical label order, shared so train.py/evaluate.py don't each redeclare it
+SENTIMENT_LABELS = [0, 1, 2]
+LABEL_NAMES = ["negative", "neutral", "positive"]
+
 
 def get_sentiment(rating):
     """Convert a numeric star rating to a lowercase sentiment string.
@@ -57,7 +61,22 @@ def split_data(
 
     Returns:
         Tuple of (train_df, val_df, test_df), each reset-indexed.
+
+    Raises:
+        ValueError: If any class in df["label"] has too few members to be
+            stratified across all three splits.
     """
+    class_counts = df["label"].value_counts()
+    too_small = class_counts[class_counts < 3]
+    if not too_small.empty:
+        raise ValueError(
+            "Cannot create a stratified train/validation/test split: "
+            f"label(s) {too_small.index.tolist()} have fewer than 3 rows "
+            f"(counts: {too_small.to_dict()}). Increase the sample size or "
+            "relax upstream filters (e.g. min_review_length) so every class "
+            "has enough rows to appear in all three splits."
+        )
+
     test_size = 1.0 - train_size - val_size
 
     train_df, temp_df = train_test_split(

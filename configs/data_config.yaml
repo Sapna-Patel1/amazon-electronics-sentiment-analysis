@@ -1,3 +1,7 @@
+paths:
+  metadata_path: data/raw/meta_Electronics.jsonl.gz
+  reviews_path: data/raw/Electronics.jsonl.gz
+
 sampling:
   metadata_sample_size: 10000
   review_sample_size: 50000

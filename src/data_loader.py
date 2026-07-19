@@ -7,7 +7,12 @@ import pandas as pd
 from utils import load_config
 
 
-def load_metadata(sample_size=10000, chunksize=50000):
+def load_metadata(
+    sample_size=10000,
+    chunksize=50000,
+    metadata_path="data/raw/meta_Electronics.jsonl.gz",
+    seed=42,
+):
     """Load and sample product metadata from the compressed JSONL file.
 
     Reads the raw metadata in chunks to avoid loading the entire file into
@@ -17,14 +22,13 @@ def load_metadata(sample_size=10000, chunksize=50000):
     Args:
         sample_size: Number of products to sample (default 10,000).
         chunksize: Number of rows to read per chunk (default 50,000).
+        metadata_path: Path to the compressed metadata JSONL file.
+        seed: Random seed for reproducible sampling.
 
     Returns:
         DataFrame with columns: parent_asin, product_title, main_category,
         average_rating, rating_number.
     """
-    # Path to the compressed metadata dataset.
-    metadata_path = "data/raw/meta_Electronics.jsonl.gz"
-
     metadata_chunks = []
 
     # Read metadata in chunks instead of loading the whole file
@@ -55,11 +59,14 @@ def load_metadata(sample_size=10000, chunksize=50000):
         columns={"title": "product_title"}
     )
 
-    # Randomly sample products
-    metadata_df = metadata_df.sample(
-        n=sample_size,
-        random_state=42
-    ).reset_index(drop=True)
+    # Randomly sample products (only if there are more than requested)
+    if len(metadata_df) > sample_size:
+        metadata_df = metadata_df.sample(
+            n=sample_size,
+            random_state=seed
+        )
+
+    metadata_df = metadata_df.reset_index(drop=True)
 
     print("\nMetadata Dataset Statistics")
     print("-" * 30)
@@ -86,7 +93,14 @@ def load_metadata(sample_size=10000, chunksize=50000):
     return metadata_df
 
 
-def load_reviews(product_ids, sample_size=50000, chunksize=50000, min_reviews_per_product=10):
+def load_reviews(
+    product_ids,
+    sample_size=50000,
+    chunksize=50000,
+    min_reviews_per_product=10,
+    reviews_path="data/raw/Electronics.jsonl.gz",
+    seed=42,
+):
     """Load and filter reviews for sampled products from the compressed JSONL file.
 
     Reads the raw reviews in chunks, keeps only reviews belonging to the
@@ -100,6 +114,8 @@ def load_reviews(product_ids, sample_size=50000, chunksize=50000, min_reviews_pe
         chunksize: Number of rows to read per chunk (default 50,000).
         min_reviews_per_product: Products with more than this many reviews
             are kept (default 10).
+        reviews_path: Path to the compressed reviews JSONL file.
+        seed: Random seed for reproducible sampling.
 
     Returns:
         Tuple of (reviews DataFrame, Index of valid product IDs).
@@ -107,9 +123,6 @@ def load_reviews(product_ids, sample_size=50000, chunksize=50000, min_reviews_pe
     Raises:
         ValueError: If no reviews are found for any of the supplied product IDs.
     """
-    # Path to the compressed reviews dataset
-    reviews_path = "data/raw/Electronics.jsonl.gz"
-
     # Store filtered chunks
     review_chunks = []
 
@@ -175,7 +188,7 @@ def load_reviews(product_ids, sample_size=50000, chunksize=50000, min_reviews_pe
     if len(reviews_df) > sample_size:
         reviews_df = reviews_df.sample(
             n=sample_size,
-            random_state=42
+            random_state=seed
         )
 
     reviews_df = reviews_df.reset_index(drop=True)
@@ -228,10 +241,14 @@ if __name__ == "__main__":
 
     cfg = load_config("configs/data_config.yaml")
     sampling_cfg = cfg["sampling"]
+    paths_cfg = cfg["paths"]
+    seed = cfg["seed"]
 
     metadata_df = load_metadata(
         sample_size=sampling_cfg["metadata_sample_size"],
         chunksize=sampling_cfg["chunksize"],
+        metadata_path=paths_cfg["metadata_path"],
+        seed=seed,
     )
 
     product_ids = metadata_df["parent_asin"].unique()
@@ -241,6 +258,8 @@ if __name__ == "__main__":
         sample_size=sampling_cfg["review_sample_size"],
         chunksize=sampling_cfg["chunksize"],
         min_reviews_per_product=sampling_cfg["min_reviews_per_product"],
+        reviews_path=paths_cfg["reviews_path"],
+        seed=seed,
     )
 
     metadata_df = metadata_df[

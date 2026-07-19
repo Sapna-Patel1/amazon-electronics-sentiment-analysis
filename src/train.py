@@ -21,7 +21,7 @@ from transformers import (
 )
 from sklearn.metrics import accuracy_score, f1_score
 
-from data_loader import load_processed_data, split_data
+from data_loader import load_processed_data
 from utils import load_config
 
 SENTIMENT_LABELS = [0, 1, 2]
@@ -87,9 +87,10 @@ def main():
     t = cfg["training"]
     seed = t["seed"]
 
-    print(f"Loading data from {cfg['data']['processed_path']}...")
-    df = load_processed_data(cfg["data"]["processed_path"])
-    train_df, val_df, _ = split_data(df, seed=seed)
+    print(f"Loading train split from {cfg['data']['train_path']}...")
+    train_df = load_processed_data(cfg["data"]["train_path"])
+    print(f"Loading validation split from {cfg['data']['val_path']}...")
+    val_df = load_processed_data(cfg["data"]["val_path"])
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 

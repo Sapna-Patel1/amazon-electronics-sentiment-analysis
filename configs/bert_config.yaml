@@ -13,6 +13,8 @@ training:
 
 data:
   processed_path: data/processed/preprocessed_reviews.csv
+  train_path: data/processed/train.csv
+  val_path: data/processed/validation.csv
   train_split: 0.70
   val_split: 0.15
   test_split: 0.15

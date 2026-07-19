@@ -150,7 +150,6 @@ Contains configuration for BERT sentiment classification, including:
 - weight decay
 - random seed
 - dataset path
-- train/validation/test split
 - sentiment label mapping
 - model and output directories
 
@@ -211,7 +210,11 @@ This script:
 The final cleaned and preprocessed review dataset is saved in:
 
 ```text
-data/processed/processed_reviews.csv.gz
+data/processed/
+├── processed_reviews.csv
+├── train.csv
+├── validation.csv
+└── test.csv
 ```
 
 This dataset is used throughout the remainder of the project for exploratory data analysis, model training, and evaluation.

@@ -261,13 +261,25 @@ The notebook analyzes the processed dataset through visualizations and descripti
 
 ### Step 4: Train the Sentiment Classification Model
 
-**To be completed.**
+`src/train.py` is implemented and verified (fine-tunes `bert-base-uncased` on the train/validation splits, config-driven via `bert_config.yaml`). Training itself has not been run yet — results pending.
+
+Run:
+
+```bash
+python src/train.py
+```
 
 ---
 
 ### Step 5: Evaluate the Sentiment Classification Model
 
-**To be completed.**
+`src/evaluate.py` is implemented and verified (accuracy, macro/weighted/per-class F1, confusion matrix, classification report on the held-out test split). Results are pending until Step 4 has been run.
+
+Run:
+
+```bash
+python src/evaluate.py
+```
 
 ---
 

@@ -20,7 +20,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 
-from data_loader import load_processed_data, split_data
+from data_loader import load_processed_data
 from utils import load_config
 
 LABEL_NAMES = ["negative", "neutral", "positive"]
@@ -81,8 +81,8 @@ def evaluate_model(
 def main():
     """Load the trained model, evaluate on the test set, and save results."""
     cfg = load_config()
-    df = load_processed_data(cfg["data"]["processed_path"])
-    _, _, test_df = split_data(df, seed=cfg["training"]["seed"])
+    print(f"Loading test split from {cfg['data']['test_path']}...")
+    test_df = load_processed_data(cfg["data"]["test_path"])
 
     model_dir = cfg["outputs"]["model_dir"]
     print(f"Evaluating model from {model_dir} on {len(test_df):,} test samples...")

@@ -1,18 +1,75 @@
 # Amazon Electronics Sentiment Analysis & Review Summarization
 
-**Group 10** | Northeastern University  
-Sapna Patel · Prema Parks · Yo Furusawa · Jose Juan Enriquez Valdes
+**Group 10** | Sapna Patel · Prema Parks · Yo Furusawa · Jose Juan Enriquez Valdes
 
 ---
 
 ## Project Overview
 
-This project builds a two-part NLP pipeline on Amazon Electronics reviews:
+Online shopping platforms contain millions of customer reviews that provide valuable information about product quality, customer satisfaction, and common product issues. However, manually reading hundreds or thousands of reviews before making a purchasing decision is time-consuming and impractical.
+
+The goal of this project is to develop a Natural Language Processing (NLP) system that automatically classifies customer review sentiment and generates concise product summaries from large collections of Amazon Electronics reviews.
+
+The project combines two transformer-based language models:
 
 1. **Sentiment Classification** — Fine-tune `bert-base-uncased` to classify reviews as positive, neutral, or negative using star-rating-derived labels.
 2. **Review Summarization** — Use `facebook/bart-large-cnn` to generate abstractive summaries of grouped product reviews, comparing sentiment-separated vs. all-reviews-combined input strategies.
 
 **Dataset:** [Amazon Reviews 2023 — Electronics](https://huggingface.co/datasets/McAuley-Lab/Amazon-Reviews-2023) (McAuley Lab, UC San Diego). Full dataset: ~18.3M reviews across ~1.6M products. Working subset: ~276,750 reviews across ~10,000 products.
+
+---
+
+This project investigates the following research questions:
+
+RQ1: How accurately can a fine-tuned BERT model classify Amazon Electronics reviews into positive, neutral, and negative sentiment using star-rating-derived labels?
+
+RQ2: How does class balancing influence BERT classification performance, particularly recall and F1-score for neutral reviews?
+
+RQ3: How does separating reviews by sentiment before summarization affect the quality of BART-generated summaries compared with summarizing all reviews together?
+
+---
+
+## Dataset
+The original Electronics dataset contains approximately:
+
+- **18.3 million reviews**
+- **1.6 million products**
+
+### Project Dataset
+
+To keep the project computationally manageable, the project uses a sampled subset of approximately **50,000 reviews**. The sampling pipeline:
+
+- randomly selects approximately **10,000 products** from the metadata dataset
+- filters out products with fewer than **10 reviews**
+- randomly samples approximately **50,000 reviews** from the remaining products
+
+This sampled dataset is used throughout preprocessing, exploratory data analysis, model training, and evaluation.
+
+### Review Features
+
+Each review contains information including:
+
+- Product ID
+- Product title
+- Review title
+- Review text
+- Star rating
+- Helpful votes
+- Product metadata
+
+During preprocessing, **review titles and review text are combined into a single input field** for sentiment classification and summarization.
+
+---
+
+## Sentiment Labels
+
+During preprocessing, reviews are assigned sentiment labels based on their original star ratings. These labels are used for training and evaluating the BERT sentiment classifier.
+
+| Star Rating | Label    | Numeric |
+|-------------|----------|---------|
+| 1–2 stars   | negative | 0       |
+| 3 stars     | neutral  | 1       |
+| 4–5 stars   | positive | 2       |
 
 ---
 
@@ -37,6 +94,16 @@ amazon-electronics-sentiment-analysis/
 ├── requirements.txt
 └── README.md
 ```
+
+---
+
+## Prerequisites
+
+Before running the project, ensure you have:
+
+- Python 3.10 or later
+- Git
+- Required Python packages listed in `requirements.txt`
 
 ---
 
@@ -66,51 +133,140 @@ nltk.download('vader_lexicon')
 
 ---
 
+## Configuration
+
+Project settings are stored in the `configs/` directory.
+
+### `bert_config.yaml`
+
+Contains configuration for BERT sentiment classification, including:
+
+- pretrained model
+- maximum sequence length
+- learning rate
+- batch size
+- number of training epochs
+- warmup steps
+- weight decay
+- random seed
+- dataset path
+- train/validation/test split
+- sentiment label mapping
+- model and output directories
+
+### `bart_config.yaml`
+
+Contains configuration for BART review summarization, including:
+
+- pretrained summarization model
+- maximum input length
+- minimum and maximum summary length
+- beam search parameters
+- review grouping settings
+- dataset path
+- input column names
+- output file locations
+
+---
+
 ## Usage
 
-### Data preprocessing
+The project follows a sequential pipeline from data sampling to model evaluation.
 
-Open and run `data/preprocessing.ipynb` to reproduce `processed_reviews.csv.gz`.
+### Step 1: Sample the Dataset
 
-### Exploratory data analysis
-
-Open and run `experiments/eda.ipynb` for class distribution, review length analysis, and sentiment breakdowns.
-
-### BERT fine-tuning
+Run:
 
 ```bash
-cd src
-python train.py
+python src/data_loader.py
 ```
 
-Hyperparameters are in `configs/bert_config.yaml`. The trained model is saved to `models/bert_sentiment/`.
+This script:
 
-### Evaluation
-
-```bash
-cd src
-python evaluate.py
-```
-
-Results (classification report, per-class F1) are saved to `outputs/evaluation_results.txt`.
+- loads the raw Amazon Reviews 2023 Electronics review and metadata datasets
+- randomly samples approximately **10,000 products**
+- filters out products with fewer than **10 reviews**
+- randomly samples approximately **50,000 reviews**
+- saves the sampled review and metadata datasets as CSV files
 
 ---
 
-## Sentiment Labels
+### Step 2: Preprocess the Dataset
 
-| Star Rating | Label    | Numeric |
-|-------------|----------|---------|
-| 1–2 stars   | negative | 0       |
-| 3 stars     | neutral  | 1       |
-| 4–5 stars   | positive | 2       |
+Run:
+
+```bash
+python src/preprocess.py
+```
+
+This script:
+
+- merges the sampled review and metadata datasets
+- removes duplicate and incomplete records
+- cleans and formats review text
+- combines review titles and review text into a single input field
+- assigns sentiment labels based on star ratings
+- generates summary statistics
+
+The final cleaned and preprocessed review dataset is saved in:
+
+```text
+data/processed/processed_reviews.csv.gz
+```
+
+This dataset is used throughout the remainder of the project for exploratory data analysis, model training, and evaluation.
 
 ---
 
-## Research Questions
+### Step 3: Exploratory Data Analysis
 
-- **RQ1:** How accurately can fine-tuned BERT classify Amazon Electronics reviews into positive, neutral, and negative?
-- **RQ2:** How does class balancing affect BERT performance, especially neutral-class recall and F1?
-- **RQ3:** Does sentiment-separated input improve BART-generated summary quality vs. all-reviews-combined input?
+Run:
+
+```bash
+jupyter notebook notebooks/eda.ipynb
+```
+
+The notebook analyzes the processed dataset through visualizations and descriptive statistics, including:
+
+- rating distribution
+- sentiment distribution
+- review length
+- review volume by product
+- additional analyses supporting the project's research questions
+
+---
+
+### Step 4: Train the Sentiment Classification Model
+
+**To be completed.**
+
+---
+
+### Step 5: Evaluate the Sentiment Classification Model
+
+**To be completed.**
+
+---
+
+### Step 6: Generate Product Review Summaries
+
+**To be completed.**
+
+---
+
+### Step 7: Evaluate Generated Summaries
+
+**To be completed.**
+
+---
+
+## Documentation
+
+The `docs/` directory contains supporting project documentation, including:
+
+- **Project Proposal** – outlines the project objectives, research questions, implementation plan, and team responsibilities.
+- **Model Research** – summarizes the literature review and background research conducted on the transformer models used in this project.
+- **Model Framework** – describes the project's methodology, including model selection, data flow, variables, and how the models are integrated into the overall pipeline.
 
 ---
 

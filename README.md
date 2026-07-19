@@ -206,7 +206,7 @@ This script:
 - cleans and formats review text
 - combines review titles and review text into a single input field
 - assigns sentiment labels based on star ratings
-- generates summary statistics
+- splits the processed dataset into **training (70%)**, **validation (15%)**, and **test (15%)** datasets
 
 The final cleaned and preprocessed review dataset is saved in:
 

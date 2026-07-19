@@ -2,91 +2,25 @@
 
 # Import the pandas library for data manipulation
 import pandas as pd
-# Splitting the data into test and validation sets
-from sklearn.model_selection import train_test_split
 
-# Mapping from star rating to integer label used by BERT (0=negative, 1=neutral, 2=positive)
-RATING_TO_LABEL = {1: 0, 2: 0, 3: 1, 4: 2, 5: 2}
+from utils import load_config
+from utils.helpers import RATING_TO_LABEL, clean_text, get_sentiment, split_data
 
-
-def get_sentiment(rating):
-    """Convert a numeric star rating to a lowercase sentiment string.
-
-    Args:
-        rating: Integer star rating (1-5).
-
-    Returns:
-        "negative" for ratings below 3, "neutral" for 3, "positive" above 3.
-    """
-    # Ratings below 3 are negative
-    if rating < 3:
-        return "negative"
-
-    # A rating of 3 is neutral
-    elif rating == 3:
-        return "neutral"
-
-    # Ratings above 3 are positive
-    else:
-        return "positive"
-
-
-# Split the dataset into training, validation, and testing sets
-def split_data(
-    df: pd.DataFrame,
-    train_size: float = 0.70,
-    val_size: float = 0.15,
-    seed: int = 42,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Split a DataFrame into stratified train, validation, and test sets.
-
-    Args:
-        df: Full labeled DataFrame (must contain a 'label' column).
-        train_size: Fraction of data for training (default 0.70).
-        val_size: Fraction of data for validation (default 0.15).
-            The test set receives the remaining fraction (default 0.15).
-        seed: Random seed for reproducibility.
-
-    Returns:
-        Tuple of (train_df, val_df, test_df), each reset-indexed.
-    """
-    # Calculate the percentage of data for the testing set
-    test_size = 1.0 - train_size - val_size
-
-    # Split the data into training and temporary datasets
-    train_df, temp_df = train_test_split(
-        df,
-        test_size=(val_size + test_size),
-        random_state=seed,
-        stratify=df["label"]
-    )
-
-    # Calculate the validation size relative to the temporary dataset
-    relative_val = val_size / (val_size + test_size)
-
-    # Split the temporary dataset into validation and testing datasets
-    val_df, test_df = train_test_split(
-        temp_df,
-        test_size=(1.0 - relative_val),
-        random_state=seed,
-        stratify=temp_df["label"]
-    )
-
-    return (
-        train_df.reset_index(drop=True),
-        val_df.reset_index(drop=True),
-        test_df.reset_index(drop=True)
-    )
 
 def preprocess_data():
     """Merge, clean, label, and split the raw review and metadata samples.
 
     Reads the sample CSVs produced by data_loader.py, merges them on
-    parent_asin, removes duplicates and rows with missing review text,
-    creates sentiment and integer label columns, builds the input_text field
-    used by BERT, and saves the preprocessed dataset plus train/val/test
+    parent_asin, removes duplicates and rows with missing or too-short review
+    text, creates sentiment and integer label columns, builds the input_text
+    field used by BERT, and saves the preprocessed dataset plus train/val/test
     splits to data/processed/.
     """
+    cfg = load_config("configs/data_config.yaml")
+    split_cfg = cfg["split"]
+    min_review_length = cfg["preprocessing"]["min_review_length"]
+    seed = cfg["seed"]
+
     # Load the already-filtered sample datasets
     metadata_df = pd.read_csv("data/raw/metadata_sample.csv")
     reviews_df = pd.read_csv("data/raw/reviews_sample.csv")
@@ -107,6 +41,10 @@ def preprocess_data():
     # Remove reviews with missing review text
     merged_df = merged_df.dropna(subset=["text"])
 
+    # Remove reviews with a missing or out-of-range rating, since sentiment
+    # and label are derived directly from it
+    merged_df = merged_df[merged_df["rating"].isin([1, 2, 3, 4, 5])]
+
     # Replace missing review titles with an empty string
     merged_df["review_title"] = merged_df["review_title"].fillna("")
 
@@ -126,19 +64,18 @@ def preprocess_data():
     # Print the new number of rows
     print(f"\nRows after removing duplicates: {len(merged_df):,}")
 
-    # Clean the review title by removing extra spaces
-    merged_df["review_title"] = (
-        merged_df["review_title"]
-        .str.strip()                          # Remove spaces at the beginning and end
-        .str.replace(r"\s+", " ", regex=True) # Replace multiple spaces with a single space
-    )
+    # Clean the review title and review text by removing extra spaces
+    merged_df["review_title"] = clean_text(merged_df["review_title"])
+    merged_df["text"] = clean_text(merged_df["text"])
 
-    # Clean the review text by removing extra spaces
-    merged_df["text"] = (
-        merged_df["text"]
-        .str.strip()                          # Remove spaces at the beginning and end
-        .str.replace(r"\s+", " ", regex=True) # Replace multiple spaces with a single space
-    )
+    # Drop reviews whose body is too short to carry meaningful sentiment content
+    rows_before_length_filter = len(merged_df)
+    merged_df = merged_df[merged_df["text"].str.len() >= min_review_length].reset_index(drop=True)
+
+    print("\nShort Reviews")
+    print("-" * 30)
+    print(f"Rows dropped for text shorter than {min_review_length} characters: "
+          f"{rows_before_length_filter - len(merged_df):,}")
 
     # Combine the review title and review text into one column.
     # When the title is empty, omit the separator so the result is not ". text".
@@ -149,11 +86,7 @@ def preprocess_data():
     )
 
     # Remove extra spaces after combining the text
-    merged_df["review"] = (
-        merged_df["review"]
-        .str.strip()
-        .str.replace(r"\s+", " ", regex=True)
-    )
+    merged_df["review"] = clean_text(merged_df["review"])
 
     # Create the lowercase sentiment column (negative / neutral / positive)
     merged_df["sentiment"] = merged_df["rating"].apply(get_sentiment)
@@ -193,7 +126,12 @@ def preprocess_data():
     print("Location: data/processed/preprocessed_reviews.csv")
 
     # Split the cleaned dataset into training, validation, and testing sets
-    train_df, val_df, test_df = split_data(merged_df)
+    train_df, val_df, test_df = split_data(
+        merged_df,
+        train_size=split_cfg["train_size"],
+        val_size=split_cfg["val_size"],
+        seed=seed,
+    )
 
     print("\nDataset Split")
     print("-" * 30)

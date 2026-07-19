@@ -38,12 +38,11 @@ class ReviewDataset(TorchDataset):
     """
 
     def __init__(self, texts, labels, tokenizer, max_length):
-        """Tokenize all texts upfront and pre-convert encodings to tensors."""
-        encodings = tokenizer(
+        """Tokenize all texts upfront; leave variable-length sequences unpadded."""
+        self.encodings = tokenizer(
             texts, truncation=True, max_length=max_length, padding=False
         )
-        self.encodings = {k: torch.tensor(v) for k, v in encodings.items()}
-        self.labels = torch.tensor(labels)
+        self.labels = labels
 
     def __len__(self):
         """Return the number of samples in the dataset."""
@@ -51,8 +50,8 @@ class ReviewDataset(TorchDataset):
 
     def __getitem__(self, idx):
         """Return a single tokenized sample with its label as tensors."""
-        item = {k: v[idx] for k, v in self.encodings.items()}
-        item["labels"] = self.labels[idx]
+        item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
+        item["labels"] = torch.tensor(self.labels[idx])
         return item
 
 
@@ -127,7 +126,7 @@ def main():
         args=args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=DataCollatorWithPadding(tokenizer),
         compute_metrics=compute_metrics,
     )

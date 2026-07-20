@@ -9,6 +9,7 @@ Usage:
     python src/evaluate.py
 """
 
+import json
 import torch
 import pandas as pd
 from pathlib import Path
@@ -120,11 +121,29 @@ def main():
     print(f"\nPer-class F1: {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
     print(f"\n{results['classification_report']}")
 
-    output_path = Path(cfg["outputs"]["results_dir"]) / f"evaluation_results_{variant}.txt"
-    output_path.parent.mkdir(exist_ok=True)
-    with open(output_path, "w") as f:
+    results_dir = Path(cfg["outputs"]["results_dir"])
+    results_dir.mkdir(exist_ok=True)
+
+    text_path = results_dir / f"evaluation_results_{variant}.txt"
+    with open(text_path, "w") as f:
         f.write(results["classification_report"])
-    print(f"Results saved to {output_path}")
+    print(f"Results saved to {text_path}")
+
+    json_path = results_dir / f"evaluation_results_{variant}.json"
+    with open(json_path, "w") as f:
+        json.dump(
+            {
+                "variant": variant,
+                "accuracy": results["accuracy"],
+                "f1_macro": results["f1_macro"],
+                "f1_weighted": results["f1_weighted"],
+                "f1_per_class": dict(zip(LABEL_NAMES, results["f1_per_class"])),
+                "confusion_matrix": results["confusion_matrix"],
+            },
+            f,
+            indent=2,
+        )
+    print(f"Structured results saved to {json_path}")
 
 
 if __name__ == "__main__":

@@ -841,6 +841,8 @@ The combined strategy remains available for comparison and additional experiment
 
 The current implementation has several limitations.
 
+- The neutral class remains difficult to classify even after class weighting: F1 only reaches 0.43–0.46 (vs. 0.85–0.96 for negative/positive) — see [Preliminary BERT Results](#preliminary-bert-results). Class balancing helps, but does not close this gap.
+- BERT training/evaluation results reflect a single random seed and a single 70/15/15 train/val/test split; no cross-validation or multiple-seed variance estimate has been run yet.
 - `facebook/bart-large-cnn` supports a maximum input length of approximately 1,024 tokens.
 - Large product-review groups must therefore be filtered, prioritized, or truncated.
 - Helpful-vote prioritization may exclude less popular but still relevant observations.

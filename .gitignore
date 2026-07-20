@@ -220,11 +220,10 @@ __marimo__/
 # macOS
 .DS_Store
 
-# Model checkpoints and large files
-models/bert_sentiment/
-models/*.bin
-models/*.pt
-models/*.safetensors
+# Model checkpoints and large files (any subdirectory, any depth --
+# e.g. models/bert_sentiment_baseline/, models/bert_sentiment_weighted/)
+models/*
+!models/.gitkeep
 *.jsonl.gz
 
 # Outputs are committed (results/summaries needed for grading) --

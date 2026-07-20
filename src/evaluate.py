@@ -102,7 +102,9 @@ def main():
     print(f"Loading test split from {cfg['data']['test_path']}...")
     test_df = load_processed_data(cfg["data"]["test_path"])
 
-    model_dir = cfg["outputs"]["model_dir"]
+    use_class_weights = cfg["training"].get("use_class_weights", False)
+    variant = "weighted" if use_class_weights else "baseline"
+    model_dir = cfg["outputs"]["model_dir"] + f"_{variant}"
     print(f"Evaluating model from {model_dir} on {len(test_df):,} test samples...")
 
     results = evaluate_model(
@@ -118,7 +120,7 @@ def main():
     print(f"\nPer-class F1: {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
     print(f"\n{results['classification_report']}")
 
-    output_path = Path(cfg["outputs"]["results_dir"]) / "evaluation_results.txt"
+    output_path = Path(cfg["outputs"]["results_dir"]) / f"evaluation_results_{variant}.txt"
     output_path.parent.mkdir(exist_ok=True)
     with open(output_path, "w") as f:
         f.write(results["classification_report"])

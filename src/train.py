@@ -20,6 +20,7 @@ from transformers import (
     DataCollatorWithPadding,
 )
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.utils.class_weight import compute_class_weight
 
 from data_loader import load_processed_data
 from utils import load_config
@@ -52,6 +53,30 @@ class ReviewDataset(TorchDataset):
         item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
         item["labels"] = torch.tensor(self.labels[idx])
         return item
+
+
+class WeightedTrainer(Trainer):
+    """Trainer that applies per-class loss weights (RQ2 class-balancing experiment).
+
+    Args:
+        class_weights: 1D tensor of per-class weights matching SENTIMENT_LABELS
+            order, or None to fall back to plain unweighted cross-entropy.
+    """
+
+    def __init__(self, class_weights=None, **kwargs):
+        super().__init__(**kwargs)
+        self.class_weights = class_weights
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+
+        weight = self.class_weights.to(logits.device) if self.class_weights is not None else None
+        loss_fct = torch.nn.CrossEntropyLoss(weight=weight)
+        loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        return (loss, outputs) if return_outputs else loss
 
 
 def compute_metrics(eval_pred) -> dict:
@@ -103,7 +128,18 @@ def main():
         model_name, num_labels=cfg["model"]["num_labels"]
     )
 
-    output_dir = cfg["outputs"]["model_dir"]
+    use_class_weights = t.get("use_class_weights", False)
+    class_weights = None
+    if use_class_weights:
+        weights = compute_class_weight(
+            class_weight="balanced",
+            classes=np.array(SENTIMENT_LABELS),
+            y=train_df["label"].values,
+        )
+        class_weights = torch.tensor(weights, dtype=torch.float)
+        print(f"Class weights (RQ2, balanced): {dict(zip(SENTIMENT_LABELS, weights))}")
+
+    output_dir = cfg["outputs"]["model_dir"] + ("_weighted" if use_class_weights else "_baseline")
     args = TrainingArguments(
         output_dir=output_dir,
         learning_rate=t["learning_rate"],
@@ -120,7 +156,8 @@ def main():
         report_to="none",
     )
 
-    trainer = Trainer(
+    trainer = WeightedTrainer(
+        class_weights=class_weights,
         model=model,
         args=args,
         train_dataset=train_ds,

@@ -154,6 +154,10 @@ def main():
         metric_for_best_model="f1_macro",
         seed=seed,
         report_to="none",
+        # Mixed-precision training roughly halves step time on CUDA GPUs
+        # (e.g. Colab's T4). Not supported the same way on MPS/CPU, so
+        # only enable it when CUDA is actually available.
+        fp16=torch.cuda.is_available(),
     )
 
     trainer = WeightedTrainer(

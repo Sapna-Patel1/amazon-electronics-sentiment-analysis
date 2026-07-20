@@ -13,8 +13,10 @@ re-running anything.
   the same metrics for the class-weighted run (`use_class_weights: true`),
   used to answer RQ2 (does class balancing improve neutral-class F1/recall?).
 
-**Status: pending.** These files don't exist yet — training hasn't been run.
-See `experiments/bert_class_balancing.ipynb` to generate them on a GPU.
+**Status: done.** Both variants trained and evaluated on an NVIDIA V100 GPU.
+See the README's "Preliminary BERT Results" section for the comparison table,
+confusion matrices, and RQ1/RQ2 answers. Re-run
+`experiments/bert_class_balancing.ipynb` to reproduce.
 
 ## BART review summarization (`src/model_runner.py`)
 

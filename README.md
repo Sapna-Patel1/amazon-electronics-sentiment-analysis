@@ -126,17 +126,16 @@ amazon-electronics-sentiment-analysis/
 │   │   ├── metadata_sample.csv
 │   │   └── reviews_sample.csv
 │   │
-│   ├── processed/
-│   │   ├── preprocessed_reviews.csv
-│   │   ├── train.csv
-│   │   ├── validation.csv
-│   │   └── test.csv
-│   │
-│   └── preprocessing.ipynb
+│   └── processed/
+│       ├── preprocessed_reviews.csv
+│       ├── train.csv
+│       ├── validation.csv
+│       └── test.csv
 │
 ├── docs/                         # Literature review and model documentation
 │
-├── experiments/                  # Experimental notebooks and results
+├── experiments/
+│   └── bert_class_balancing.ipynb # Reproducible baseline-vs-weighted BERT run (RQ2)
 │
 ├── models/                       # Saved model checkpoints (git-ignored)
 │
@@ -144,9 +143,12 @@ amazon-electronics-sentiment-analysis/
 │   └── eda.ipynb                 # Exploratory data analysis
 │
 ├── outputs/
+│   ├── evaluation_results_baseline.{txt,json}   # BERT baseline results
+│   ├── evaluation_results_weighted.{txt,json}   # BERT class-weighted results
 │   ├── summary_samples.csv
 │   ├── summary_evaluation.csv
-│   └── strategy_comparison.csv
+│   ├── strategy_comparison.csv
+│   └── description.md            # What's in this directory and its status
 │
 ├── src/
 │   ├── data_loader.py            # Sample raw review and metadata data
@@ -532,25 +534,27 @@ Run:
 python src/train.py
 ```
 
-The training script is expected to:
+The training script:
 
-- Load the processed training dataset.
-- Load the processed validation dataset.
-- Tokenize review text.
-- Fine-tune `bert-base-uncased`.
-- Predict negative, neutral, or positive sentiment.
-- Apply configurable training hyperparameters.
-- Support class-balancing experiments.
-- Save the trained model checkpoint.
-- Save the tokenizer and training information.
+- Loads the processed training dataset.
+- Loads the processed validation dataset.
+- Tokenizes review text.
+- Fine-tunes `bert-base-uncased`.
+- Predicts negative, neutral, or positive sentiment.
+- Applies configurable training hyperparameters.
+- Supports a class-balancing experiment (RQ2): setting `training.use_class_weights: true` in `bert_config.yaml` weights the loss function by inverse class frequency (via scikit-learn's `compute_class_weight(class_weight="balanced", ...)`, computed from the actual train-split label distribution), so mistakes on the minority neutral class are penalized more heavily during training.
+- Saves the trained model checkpoint and tokenizer.
 
-The model checkpoints should be saved under:
+Model checkpoints are saved under:
 
 ```text
-models/
+models/bert_sentiment_baseline/    # training.use_class_weights: false
+models/bert_sentiment_weighted/    # training.use_class_weights: true
 ```
 
-The BERT training and balancing experiments are part of the ongoing model-development work.
+### Reproducing the BERT Training Run
+
+`experiments/bert_class_balancing.ipynb` runs both variants end to end (baseline, then class-weighted) and produces the comparison used to answer RQ2. It's designed to work on any CUDA GPU without assuming anything is pre-installed in the notebook's own kernel environment — it creates an isolated Python virtual environment under `~/.amazon_sentiment_venv` and installs all project dependencies there, which avoids conflicts with shared or read-only cluster environments. Open the notebook and run all cells top to bottom; each variant's `python src/train.py` + `python src/evaluate.py` run takes roughly 8–9 minutes on an NVIDIA V100.
 
 ---
 
@@ -562,20 +566,57 @@ Run:
 python src/evaluate.py
 ```
 
-The BERT evaluation process is expected to calculate:
+The BERT evaluation process calculates, on the held-out test split (7,239 reviews: 1,390 negative, 483 neutral, 5,366 positive):
 
 - Accuracy
-- Precision
-- Recall
-- F1-score
-- Macro-F1
-- Neutral-class F1
+- Precision (macro and per-class)
+- Recall (macro and per-class)
+- F1-score (macro, weighted, and per-class)
 - Confusion matrix
-- Per-class performance
 
-The evaluation should compare the model predictions with the true sentiment labels in the processed test dataset.
+Results are written to `outputs/evaluation_results_{baseline,weighted}.txt` (a full `sklearn` classification report) and the equivalent structured `.json`, and are also committed to this repository — see [Preliminary BERT Results](#preliminary-bert-results) below.
 
-This portion of the model pipeline remains under active development.
+---
+
+## Preliminary BERT Results
+
+Both variants were trained for 3 epochs on an NVIDIA V100 GPU and evaluated on the same 7,239-review test split.
+
+| Metric | Baseline | Class-Weighted | Delta |
+|---|---:|---:|---:|
+| Accuracy | 0.9048 | 0.9050 | +0.0001 |
+| Precision (macro) | 0.7477 | 0.7488 | +0.0011 |
+| Recall (macro) | 0.7452 | 0.7674 | +0.0222 |
+| F1 (macro) | 0.7464 | 0.7576 | +0.0111 |
+| F1 (weighted) | 0.9044 | 0.9071 | +0.0028 |
+| F1 (negative) | 0.8499 | 0.8546 | +0.0048 |
+| F1 (neutral) | 0.4281 | 0.4569 | **+0.0287** |
+| F1 (positive) | 0.9614 | 0.9613 | -0.0001 |
+| Recall (neutral) | 0.4224 | 0.4824 | **+0.0600** |
+
+**RQ1 answer:** the baseline model reaches 90.5% overall accuracy, but performance is very uneven across classes — F1 is 0.96 for positive and 0.85 for negative, but only 0.43 for neutral. Overall accuracy alone substantially overstates how well the model handles the minority neutral class, since positive reviews dominate the test set (5,366 of 7,239 rows).
+
+**RQ2 answer:** class weighting measurably improves neutral-class performance (F1 +0.029, recall +0.060) at essentially no cost to overall accuracy (+0.0001) or weighted F1 (+0.003). The improvement isn't free, though — it comes from trading a small amount of positive-class recall (-0.009) and negative-class precision (-0.006) for better neutral-class recall. Class balancing helps the specific problem it targets, but neutral reviews remain the hardest class to classify by a wide margin even after weighting.
+
+Confusion matrices (rows = true label, columns = predicted label):
+
+**Baseline**
+
+| | negative | neutral | positive |
+|---|---:|---:|---:|
+| **negative** | 1183 | 130 | 77 |
+| **neutral** | 144 | 204 | 135 |
+| **positive** | 67 | 136 | 5163 |
+
+**Class-Weighted**
+
+| | negative | neutral | positive |
+|---|---:|---:|---:|
+| **negative** | 1205 | 128 | 57 |
+| **neutral** | 148 | 233 | 102 |
+| **positive** | 77 | 176 | 5113 |
+
+The weighted model correctly classifies 29 more neutral reviews (233 vs. 204) than the baseline, at the cost of a few more negative/positive misclassifications elsewhere — consistent with the metrics above.
 
 ---
 
@@ -818,6 +859,17 @@ The current implementation has several limitations.
 
 ## Reproducibility Notes
 
+### BERT Baseline/Weighted Results
+
+To reproduce the results in [Preliminary BERT Results](#preliminary-bert-results):
+
+1. Clone or pull the latest repository (a CUDA GPU is required — training runs in a few minutes on a V100, but is impractically slow on CPU).
+2. Open `experiments/bert_class_balancing.ipynb` and run all cells top to bottom. It creates its own isolated virtual environment and installs dependencies there, so no manual environment setup is required, and it works the same way whether you're on a personal GPU machine, a shared/managed cluster, Colab, or Kaggle.
+3. The notebook runs `python src/train.py` + `python src/evaluate.py` once with `training.use_class_weights: false` (baseline) and once with `true` (class-weighted), then prints the comparison table shown above.
+4. Results are written to `outputs/evaluation_results_{baseline,weighted}.{txt,json}` and model checkpoints to `models/bert_sentiment_{baseline,weighted}/` (not committed to GitHub — checkpoints are large).
+
+### BART Outputs
+
 To reproduce the current BART outputs:
 
 1. Clone or pull the latest repository.
@@ -1015,7 +1067,7 @@ The BART summarization contribution includes:
 |----------------------|----------|---------------------------------------------------|
 | M2: Project Proposal |   Jul 5  | Complete                                          |
 | M3: Data Pipeline    |   Jul 19 | In progress                                       |
-| M4: Model Pipeline   |   Jul 26 | In progress — preliminary BART pipeline completed |
+| M4: Model Pipeline   |   Jul 26 | In progress — BERT baseline/weighted training complete; preliminary BART pipeline completed |
 | M5: Final Submission |   Aug 9  | Upcoming                                          |
 
 ---
@@ -1029,6 +1081,10 @@ The BART summarization contribution includes:
 - Processed dataset available
 - Training, validation, and test datasets created
 - Exploratory data-analysis notebook available
+- BERT fine-tuning (baseline and class-weighted variants both trained on GPU)
+- BERT evaluation (precision, recall, F1, confusion matrix for both variants)
+- Class-balancing experiment (RQ2) — see [Preliminary BERT Results](#preliminary-bert-results)
+- Reproducible, GPU-environment-agnostic BERT training notebook (`experiments/bert_class_balancing.ipynb`)
 - BART configuration created
 - BART model successfully loaded
 - Product reviews grouped by sentiment
@@ -1043,9 +1099,6 @@ The BART summarization contribution includes:
 ### In Progress
 
 - Final Milestone 3 compliance review
-- BERT fine-tuning
-- BERT evaluation
-- Class-balancing experiments
 - Expanded BART testing
 - Manual qualitative summary evaluation
 - Final comparison between combined and sentiment-separated strategies

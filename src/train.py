@@ -20,10 +20,11 @@ from transformers import (
     DataCollatorWithPadding,
 )
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.utils.class_weight import compute_class_weight
 
 from data_loader import load_processed_data
 from utils import load_config
-from utils.helpers import SENTIMENT_LABELS
+from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS, model_dir_for_variant
 
 
 class ReviewDataset(TorchDataset):
@@ -52,6 +53,30 @@ class ReviewDataset(TorchDataset):
         item = {k: torch.tensor(v[idx]) for k, v in self.encodings.items()}
         item["labels"] = torch.tensor(self.labels[idx])
         return item
+
+
+class WeightedTrainer(Trainer):
+    """Trainer that applies per-class loss weights (RQ2 class-balancing experiment).
+
+    Args:
+        class_weights: 1D tensor of per-class weights matching SENTIMENT_LABELS
+            order, or None to fall back to plain unweighted cross-entropy.
+    """
+
+    def __init__(self, class_weights=None, **kwargs):
+        super().__init__(**kwargs)
+        self.class_weights = class_weights
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        labels = inputs.pop("labels")
+        outputs = model(**inputs)
+        logits = outputs.logits
+
+        weight = self.class_weights.to(logits.device) if self.class_weights is not None else None
+        loss_fct = torch.nn.CrossEntropyLoss(weight=weight)
+        loss = loss_fct(logits.view(-1, logits.size(-1)), labels.view(-1))
+
+        return (loss, outputs) if return_outputs else loss
 
 
 def compute_metrics(eval_pred) -> dict:
@@ -103,7 +128,18 @@ def main():
         model_name, num_labels=cfg["model"]["num_labels"]
     )
 
-    output_dir = cfg["outputs"]["model_dir"]
+    use_class_weights = t.get("use_class_weights", False)
+    class_weights = None
+    if use_class_weights:
+        weights = compute_class_weight(
+            class_weight="balanced",
+            classes=np.array(SENTIMENT_LABELS),
+            y=train_df["label"].values,
+        )
+        class_weights = torch.tensor(weights, dtype=torch.float)
+        print(f"Class weights (RQ2, balanced): {dict(zip(LABEL_NAMES, weights))}")
+
+    output_dir = model_dir_for_variant(cfg["outputs"]["model_dir"], use_class_weights)
     args = TrainingArguments(
         output_dir=output_dir,
         learning_rate=t["learning_rate"],
@@ -118,9 +154,14 @@ def main():
         metric_for_best_model="f1_macro",
         seed=seed,
         report_to="none",
+        # Mixed-precision training roughly halves step time on CUDA GPUs
+        # (e.g. Colab's T4). Not supported the same way on MPS/CPU, so
+        # only enable it when CUDA is actually available.
+        fp16=torch.cuda.is_available(),
     )
 
-    trainer = Trainer(
+    trainer = WeightedTrainer(
+        class_weights=class_weights,
         model=model,
         args=args,
         train_dataset=train_ds,

@@ -10,6 +10,11 @@ training:
   warmup_steps: 500
   weight_decay: 0.01
   seed: 42
+  # RQ2 class-balancing experiment: when true, the loss is weighted by
+  # inverse class frequency (computed from the train split at runtime).
+  # Run once with this false (baseline) and once true (weighted), then
+  # compare neutral-class F1/recall between the two runs.
+  use_class_weights: false
 
 data:
   processed_path: data/processed/preprocessed_reviews.csv

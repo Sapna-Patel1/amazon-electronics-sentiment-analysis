@@ -15,6 +15,22 @@ SENTIMENT_LABELS = [0, 1, 2]
 LABEL_NAMES = ["negative", "neutral", "positive"]
 
 
+def model_dir_for_variant(base_dir: str, use_class_weights: bool) -> str:
+    """Build the per-variant model directory name for the RQ2 experiment.
+
+    Shared by train.py (to save to) and evaluate.py (to load from) so the
+    two can't drift apart into looking at different directory names.
+
+    Args:
+        base_dir: The configured base model directory (outputs.model_dir).
+        use_class_weights: Whether this is the class-weighted variant.
+
+    Returns:
+        base_dir with "_weighted" or "_baseline" appended.
+    """
+    return base_dir + ("_weighted" if use_class_weights else "_baseline")
+
+
 def get_sentiment(rating):
     """Convert a numeric star rating to a lowercase sentiment string.
 

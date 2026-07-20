@@ -1,28 +1,33 @@
 """
 Evaluate a fine-tuned BERT sentiment classifier on the held-out test set.
 
-Loads the saved model from models/bert_sentiment/, runs inference on the
-test split, and reports accuracy, per-class F1, confusion matrix, and a
-full classification report. Results are saved to outputs/evaluation_results.txt.
+Loads the saved model from models/bert_sentiment_{baseline,weighted}/
+(whichever variant configs/bert_config.yaml's training.use_class_weights
+currently selects), runs inference on the test split, and reports
+accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
+matrix, and a full classification report. Results are saved to
+outputs/evaluation_results_{baseline,weighted}.{txt,json}.
 
 Usage:
     python src/evaluate.py
 """
 
+import json
 import torch
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from transformers import AutoTokenizer, pipeline
 from sklearn.metrics import (
     accuracy_score,
-    f1_score,
+    precision_recall_fscore_support,
     classification_report,
     confusion_matrix,
 )
 
 from data_loader import load_processed_data
 from utils import load_config
-from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS
+from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS, model_dir_for_variant
 
 
 def evaluate_model(
@@ -42,8 +47,12 @@ def evaluate_model(
     Returns:
         Dictionary containing:
         - ``accuracy``: Overall accuracy score.
+        - ``precision_macro``: Macro-averaged precision across all three classes.
+        - ``recall_macro``: Macro-averaged recall across all three classes.
         - ``f1_macro``: Macro-averaged F1 across all three classes.
         - ``f1_weighted``: Weighted-averaged F1.
+        - ``precision_per_class``: List of per-class precision [negative, neutral, positive].
+        - ``recall_per_class``: List of per-class recall [negative, neutral, positive].
         - ``f1_per_class``: List of per-class F1 scores [negative, neutral, positive].
         - ``classification_report``: Full sklearn classification report string.
         - ``confusion_matrix``: Confusion matrix as a nested list.
@@ -86,11 +95,29 @@ def evaluate_model(
     )
     cm = confusion_matrix(true_labels, pred_labels, labels=SENTIMENT_LABELS)
 
+    # zero_division=np.nan (rather than the sklearn default of silently
+    # returning 0.0) so a class that was never predicted is distinguishable
+    # from a class that was predicted but always wrong -- both would
+    # otherwise report an identical, misleadingly-precise 0.0.
+    precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None, zero_division=np.nan
+    )
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro", zero_division=np.nan
+    )
+    _, _, f1_weighted, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted", zero_division=np.nan
+    )
+
     return {
         "accuracy": accuracy_score(true_labels, pred_labels),
-        "f1_macro": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
-        "f1_weighted": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted"),
-        "f1_per_class": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
+        "precision_macro": precision_macro,
+        "recall_macro": recall_macro,
+        "f1_macro": f1_macro,
+        "f1_weighted": f1_weighted,
+        "precision_per_class": precision_per_class.tolist(),
+        "recall_per_class": recall_per_class.tolist(),
+        "f1_per_class": f1_per_class.tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
     }
@@ -102,7 +129,9 @@ def main():
     print(f"Loading test split from {cfg['data']['test_path']}...")
     test_df = load_processed_data(cfg["data"]["test_path"])
 
-    model_dir = cfg["outputs"]["model_dir"]
+    use_class_weights = cfg["training"].get("use_class_weights", False)
+    variant = "weighted" if use_class_weights else "baseline"
+    model_dir = model_dir_for_variant(cfg["outputs"]["model_dir"], use_class_weights)
     print(f"Evaluating model from {model_dir} on {len(test_df):,} test samples...")
 
     results = evaluate_model(
@@ -112,17 +141,43 @@ def main():
         batch_size=cfg["training"]["batch_size"],
     )
 
-    print(f"\nAccuracy:    {results['accuracy']:.4f}")
-    print(f"F1 Macro:    {results['f1_macro']:.4f}")
-    print(f"F1 Weighted: {results['f1_weighted']:.4f}")
-    print(f"\nPer-class F1: {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
+    print(f"\nAccuracy:         {results['accuracy']:.4f}")
+    print(f"Precision Macro:  {results['precision_macro']:.4f}")
+    print(f"Recall Macro:     {results['recall_macro']:.4f}")
+    print(f"F1 Macro:         {results['f1_macro']:.4f}")
+    print(f"F1 Weighted:      {results['f1_weighted']:.4f}")
+    print(f"\nPer-class precision: {dict(zip(LABEL_NAMES, results['precision_per_class']))}")
+    print(f"Per-class recall:    {dict(zip(LABEL_NAMES, results['recall_per_class']))}")
+    print(f"Per-class F1:        {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
     print(f"\n{results['classification_report']}")
 
-    output_path = Path(cfg["outputs"]["results_dir"]) / "evaluation_results.txt"
-    output_path.parent.mkdir(exist_ok=True)
-    with open(output_path, "w") as f:
+    results_dir = Path(cfg["outputs"]["results_dir"])
+    results_dir.mkdir(exist_ok=True)
+
+    text_path = results_dir / f"evaluation_results_{variant}.txt"
+    with open(text_path, "w") as f:
         f.write(results["classification_report"])
-    print(f"Results saved to {output_path}")
+    print(f"Results saved to {text_path}")
+
+    json_path = results_dir / f"evaluation_results_{variant}.json"
+    with open(json_path, "w") as f:
+        json.dump(
+            {
+                "variant": variant,
+                "accuracy": results["accuracy"],
+                "precision_macro": results["precision_macro"],
+                "recall_macro": results["recall_macro"],
+                "f1_macro": results["f1_macro"],
+                "f1_weighted": results["f1_weighted"],
+                "precision_per_class": dict(zip(LABEL_NAMES, results["precision_per_class"])),
+                "recall_per_class": dict(zip(LABEL_NAMES, results["recall_per_class"])),
+                "f1_per_class": dict(zip(LABEL_NAMES, results["f1_per_class"])),
+                "confusion_matrix": results["confusion_matrix"],
+            },
+            f,
+            indent=2,
+        )
+    print(f"Structured results saved to {json_path}")
 
 
 if __name__ == "__main__":

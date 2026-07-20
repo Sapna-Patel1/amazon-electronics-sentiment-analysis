@@ -14,7 +14,7 @@ re-running anything.
   used to answer RQ2 (does class balancing improve neutral-class F1/recall?).
 
 **Status: pending.** These files don't exist yet — training hasn't been run.
-See `experiments/bert_class_balancing_colab.ipynb` to generate them on a GPU.
+See `experiments/bert_class_balancing.ipynb` to generate them on a GPU.
 
 ## BART review summarization (`src/model_runner.py`)
 

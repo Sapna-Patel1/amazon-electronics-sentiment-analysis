@@ -24,7 +24,7 @@ from sklearn.utils.class_weight import compute_class_weight
 
 from data_loader import load_processed_data
 from utils import load_config
-from utils.helpers import SENTIMENT_LABELS
+from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS, model_dir_for_variant
 
 
 class ReviewDataset(TorchDataset):
@@ -137,9 +137,9 @@ def main():
             y=train_df["label"].values,
         )
         class_weights = torch.tensor(weights, dtype=torch.float)
-        print(f"Class weights (RQ2, balanced): {dict(zip(SENTIMENT_LABELS, weights))}")
+        print(f"Class weights (RQ2, balanced): {dict(zip(LABEL_NAMES, weights))}")
 
-    output_dir = cfg["outputs"]["model_dir"] + ("_weighted" if use_class_weights else "_baseline")
+    output_dir = model_dir_for_variant(cfg["outputs"]["model_dir"], use_class_weights)
     args = TrainingArguments(
         output_dir=output_dir,
         learning_rate=t["learning_rate"],

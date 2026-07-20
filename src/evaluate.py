@@ -1,9 +1,12 @@
 """
 Evaluate a fine-tuned BERT sentiment classifier on the held-out test set.
 
-Loads the saved model from models/bert_sentiment/, runs inference on the
-test split, and reports accuracy, per-class F1, confusion matrix, and a
-full classification report. Results are saved to outputs/evaluation_results.txt.
+Loads the saved model from models/bert_sentiment_{baseline,weighted}/
+(whichever variant configs/bert_config.yaml's training.use_class_weights
+currently selects), runs inference on the test split, and reports
+accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
+matrix, and a full classification report. Results are saved to
+outputs/evaluation_results_{baseline,weighted}.{txt,json}.
 
 Usage:
     python src/evaluate.py
@@ -11,21 +14,20 @@ Usage:
 
 import json
 import torch
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from transformers import AutoTokenizer, pipeline
 from sklearn.metrics import (
     accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
+    precision_recall_fscore_support,
     classification_report,
     confusion_matrix,
 )
 
 from data_loader import load_processed_data
 from utils import load_config
-from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS
+from utils.helpers import LABEL_NAMES, SENTIMENT_LABELS, model_dir_for_variant
 
 
 def evaluate_model(
@@ -93,15 +95,29 @@ def evaluate_model(
     )
     cm = confusion_matrix(true_labels, pred_labels, labels=SENTIMENT_LABELS)
 
+    # zero_division=np.nan (rather than the sklearn default of silently
+    # returning 0.0) so a class that was never predicted is distinguishable
+    # from a class that was predicted but always wrong -- both would
+    # otherwise report an identical, misleadingly-precise 0.0.
+    precision_per_class, recall_per_class, f1_per_class, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None, zero_division=np.nan
+    )
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro", zero_division=np.nan
+    )
+    _, _, f1_weighted, _ = precision_recall_fscore_support(
+        true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted", zero_division=np.nan
+    )
+
     return {
         "accuracy": accuracy_score(true_labels, pred_labels),
-        "precision_macro": precision_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
-        "recall_macro": recall_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
-        "f1_macro": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
-        "f1_weighted": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted"),
-        "precision_per_class": precision_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
-        "recall_per_class": recall_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
-        "f1_per_class": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
+        "precision_macro": precision_macro,
+        "recall_macro": recall_macro,
+        "f1_macro": f1_macro,
+        "f1_weighted": f1_weighted,
+        "precision_per_class": precision_per_class.tolist(),
+        "recall_per_class": recall_per_class.tolist(),
+        "f1_per_class": f1_per_class.tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
     }
@@ -115,7 +131,7 @@ def main():
 
     use_class_weights = cfg["training"].get("use_class_weights", False)
     variant = "weighted" if use_class_weights else "baseline"
-    model_dir = cfg["outputs"]["model_dir"] + f"_{variant}"
+    model_dir = model_dir_for_variant(cfg["outputs"]["model_dir"], use_class_weights)
     print(f"Evaluating model from {model_dir} on {len(test_df):,} test samples...")
 
     results = evaluate_model(

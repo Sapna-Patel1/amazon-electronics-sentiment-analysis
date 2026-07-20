@@ -227,6 +227,5 @@ models/*.pt
 models/*.safetensors
 *.jsonl.gz
 
-# Outputs (keep directory, ignore contents except .gitkeep)
-outputs/*
-!outputs/.gitkeep
+# Outputs are committed (results/summaries needed for grading) --
+# tracked here intentionally, no ignore rule.

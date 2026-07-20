@@ -17,6 +17,8 @@ from transformers import AutoTokenizer, pipeline
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
+    precision_score,
+    recall_score,
     classification_report,
     confusion_matrix,
 )
@@ -43,8 +45,12 @@ def evaluate_model(
     Returns:
         Dictionary containing:
         - ``accuracy``: Overall accuracy score.
+        - ``precision_macro``: Macro-averaged precision across all three classes.
+        - ``recall_macro``: Macro-averaged recall across all three classes.
         - ``f1_macro``: Macro-averaged F1 across all three classes.
         - ``f1_weighted``: Weighted-averaged F1.
+        - ``precision_per_class``: List of per-class precision [negative, neutral, positive].
+        - ``recall_per_class``: List of per-class recall [negative, neutral, positive].
         - ``f1_per_class``: List of per-class F1 scores [negative, neutral, positive].
         - ``classification_report``: Full sklearn classification report string.
         - ``confusion_matrix``: Confusion matrix as a nested list.
@@ -89,8 +95,12 @@ def evaluate_model(
 
     return {
         "accuracy": accuracy_score(true_labels, pred_labels),
+        "precision_macro": precision_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
+        "recall_macro": recall_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
         "f1_macro": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="macro"),
         "f1_weighted": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average="weighted"),
+        "precision_per_class": precision_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
+        "recall_per_class": recall_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
         "f1_per_class": f1_score(true_labels, pred_labels, labels=SENTIMENT_LABELS, average=None).tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
@@ -115,10 +125,14 @@ def main():
         batch_size=cfg["training"]["batch_size"],
     )
 
-    print(f"\nAccuracy:    {results['accuracy']:.4f}")
-    print(f"F1 Macro:    {results['f1_macro']:.4f}")
-    print(f"F1 Weighted: {results['f1_weighted']:.4f}")
-    print(f"\nPer-class F1: {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
+    print(f"\nAccuracy:         {results['accuracy']:.4f}")
+    print(f"Precision Macro:  {results['precision_macro']:.4f}")
+    print(f"Recall Macro:     {results['recall_macro']:.4f}")
+    print(f"F1 Macro:         {results['f1_macro']:.4f}")
+    print(f"F1 Weighted:      {results['f1_weighted']:.4f}")
+    print(f"\nPer-class precision: {dict(zip(LABEL_NAMES, results['precision_per_class']))}")
+    print(f"Per-class recall:    {dict(zip(LABEL_NAMES, results['recall_per_class']))}")
+    print(f"Per-class F1:        {dict(zip(LABEL_NAMES, results['f1_per_class']))}")
     print(f"\n{results['classification_report']}")
 
     results_dir = Path(cfg["outputs"]["results_dir"])
@@ -135,8 +149,12 @@ def main():
             {
                 "variant": variant,
                 "accuracy": results["accuracy"],
+                "precision_macro": results["precision_macro"],
+                "recall_macro": results["recall_macro"],
                 "f1_macro": results["f1_macro"],
                 "f1_weighted": results["f1_weighted"],
+                "precision_per_class": dict(zip(LABEL_NAMES, results["precision_per_class"])),
+                "recall_per_class": dict(zip(LABEL_NAMES, results["recall_per_class"])),
                 "f1_per_class": dict(zip(LABEL_NAMES, results["f1_per_class"])),
                 "confusion_matrix": results["confusion_matrix"],
             },

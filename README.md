@@ -143,8 +143,8 @@ amazon-electronics-sentiment-analysis/
 │   └── eda.ipynb                 # Exploratory data analysis
 │
 ├── outputs/
-│   ├── evaluation_results_baseline.{txt,json}   # BERT baseline results
-│   ├── evaluation_results_weighted.{txt,json}   # BERT class-weighted results
+│   ├── bert_evaluation_baseline.{txt,json}   # BERT baseline results
+│   ├── bert_evaluation_weighted.{txt,json}   # BERT class-weighted results
 │   ├── summary_samples.csv
 │   ├── summary_evaluation.csv
 │   ├── strategy_comparison.csv
@@ -574,7 +574,7 @@ The BERT evaluation process calculates, on the held-out test split (7,239 review
 - F1-score (macro, weighted, and per-class)
 - Confusion matrix
 
-Results are written to `outputs/evaluation_results_{baseline,weighted}.txt` (a full `sklearn` classification report) and the equivalent structured `.json`, and are also committed to this repository — see [Preliminary BERT Results](#preliminary-bert-results) below.
+Results are written to `outputs/bert_evaluation_{baseline,weighted}.txt` (a full `sklearn` classification report) and the equivalent structured `.json`, and are also committed to this repository — see [Preliminary BERT Results](#preliminary-bert-results) below.
 
 ---
 
@@ -868,7 +868,7 @@ To reproduce the results in [Preliminary BERT Results](#preliminary-bert-results
 1. Clone or pull the latest repository (a CUDA GPU is required — training runs in a few minutes on a V100, but is impractically slow on CPU).
 2. Open `experiments/bert_class_balancing.ipynb` and run all cells top to bottom. It creates its own isolated virtual environment and installs dependencies there, so no manual environment setup is required, and it works the same way whether you're on a personal GPU machine, a shared/managed cluster, Colab, or Kaggle.
 3. The notebook runs `python src/train.py` + `python src/evaluate.py` once with `training.use_class_weights: false` (baseline) and once with `true` (class-weighted), then prints the comparison table shown above.
-4. Results are written to `outputs/evaluation_results_{baseline,weighted}.{txt,json}` and model checkpoints to `models/bert_sentiment_{baseline,weighted}/` (not committed to GitHub — checkpoints are large).
+4. Results are written to `outputs/bert_evaluation_{baseline,weighted}.{txt,json}` and model checkpoints to `models/bert_sentiment_{baseline,weighted}/` (not committed to GitHub — checkpoints are large).
 
 ### BART Outputs
 

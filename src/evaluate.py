@@ -6,7 +6,7 @@ Loads the saved model from models/bert_sentiment_{baseline,weighted}/
 currently selects), runs inference on the test split, and reports
 accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
 matrix, and a full classification report. Results are saved to
-outputs/evaluation_results_{baseline,weighted}.{txt,json}.
+outputs/bert_evaluation_{baseline,weighted}.{txt,json}.
 
 Usage:
     python src/evaluate.py
@@ -154,12 +154,12 @@ def main():
     results_dir = Path(cfg["outputs"]["results_dir"])
     results_dir.mkdir(exist_ok=True)
 
-    text_path = results_dir / f"evaluation_results_{variant}.txt"
+    text_path = results_dir / f"bert_evaluation_{variant}.txt"
     with open(text_path, "w") as f:
         f.write(results["classification_report"])
     print(f"Results saved to {text_path}")
 
-    json_path = results_dir / f"evaluation_results_{variant}.json"
+    json_path = results_dir / f"bert_evaluation_{variant}.json"
     with open(json_path, "w") as f:
         json.dump(
             {

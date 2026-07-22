@@ -6,7 +6,9 @@ Loads the saved model from models/bert_sentiment_{baseline,weighted}/
 currently selects), runs inference on the test split, and reports
 accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
 matrix, and a full classification report. Results are saved to
-outputs/bert_evaluation_{baseline,weighted}.{txt,json}.
+outputs/bert_evaluation_{baseline,weighted}.{txt,json}, and a random
+10-row sample of predictions (review text, actual sentiment, predicted
+sentiment) is saved to outputs/bert_sample_predictions_{baseline,weighted}.csv.
 
 Usage:
     python src/evaluate.py
@@ -120,7 +122,42 @@ def evaluate_model(
         "f1_per_class": f1_per_class.tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
+        "pred_labels": pred_labels,
     }
+
+
+def save_sample_predictions(
+    test_df: pd.DataFrame,
+    pred_labels: list,
+    output_path: Path,
+    n: int = 10,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Save a random sample of test-set predictions for manual inspection.
+
+    Args:
+        test_df: DataFrame with 'input_text' and 'label' columns (test split).
+        pred_labels: Predicted integer labels, aligned index-for-index with test_df.
+        output_path: CSV path to write the sample to.
+        n: Number of rows to sample.
+        seed: Random seed for reproducible sampling.
+
+    Returns:
+        The sampled DataFrame that was written to output_path.
+    """
+    rng = np.random.RandomState(seed)
+    sample_idx = rng.choice(len(test_df), size=min(n, len(test_df)), replace=False)
+
+    label_names = np.array(LABEL_NAMES)
+    sample = pd.DataFrame(
+        {
+            "review_text": test_df["input_text"].values[sample_idx],
+            "actual_sentiment": label_names[test_df["label"].values[sample_idx]],
+            "predicted_sentiment": label_names[np.array(pred_labels)[sample_idx]],
+        }
+    )
+    sample.to_csv(output_path, index=False)
+    return sample
 
 
 def main():
@@ -178,6 +215,10 @@ def main():
             indent=2,
         )
     print(f"Structured results saved to {json_path}")
+
+    samples_path = results_dir / f"bert_sample_predictions_{variant}.csv"
+    save_sample_predictions(test_df, results["pred_labels"], samples_path, n=10)
+    print(f"Sample predictions saved to {samples_path}")
 
 
 if __name__ == "__main__":

@@ -12,27 +12,18 @@ re-running anything.
 - `bert_evaluation_weighted.txt` / `bert_evaluation_weighted.json` —
   the same metrics for the class-weighted run (`use_class_weights: true`),
   used to answer RQ2 (does class balancing improve neutral-class F1/recall?).
+- `bert_sample_predictions_baseline.csv` / `bert_sample_predictions_weighted.csv` —
+  10 randomly sampled test-set rows per variant, each with the review text,
+  actual sentiment, and predicted sentiment, for manual spot-checking.
 
 **Status: done.** Both variants trained and evaluated on an NVIDIA V100 GPU.
 Re-run `experiments/bert_class_balancing.ipynb` to reproduce (also regenerates
 the full comparison table and confusion matrices in the README).
 
-### Analysis
-
-- **RQ1 (accuracy):** the baseline model reaches 90.5% overall accuracy, but
-  this is misleading on its own — performance is very uneven across classes
-  (F1 0.96 positive, 0.85 negative, only 0.43 neutral). Positive reviews
-  dominate the test set (5,366 of 7,239 rows), so overall accuracy mostly
-  reflects how well the model does on the majority class.
-- **RQ2 (class balancing):** weighting the loss by inverse class frequency
-  improves neutral-class F1 by +0.029 and recall by +0.060, at essentially no
-  cost to overall accuracy (+0.0001) or weighted F1 (+0.003). The gain isn't
-  free — it trades a small amount of positive-class recall (-0.009) and
-  negative-class precision (-0.006) for the neutral-class improvement.
-  Class balancing helps the specific problem it targets, but neutral reviews
-  remain the hardest class by a wide margin even after weighting.
-- See the README's "Preliminary BERT Results" section for the full
-  baseline-vs-weighted comparison table and both confusion matrices.
+The full RQ1/RQ2 analysis lives in the README's
+[Preliminary BERT Results](../README.md#preliminary-bert-results) section
+(comparison table, confusion matrices, and interpretation) rather than
+duplicated here.
 
 ## BART review summarization (`src/model_runner.py`)
 

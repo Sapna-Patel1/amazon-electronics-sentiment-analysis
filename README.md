@@ -588,19 +588,19 @@ Both variants were trained for 3 epochs on an NVIDIA V100 GPU and evaluated on t
 
 | Metric | Baseline | Class-Weighted | Delta |
 |---|---:|---:|---:|
-| Accuracy | 0.9048 | 0.9050 | +0.0001 |
-| Precision (macro) | 0.7477 | 0.7488 | +0.0011 |
-| Recall (macro) | 0.7452 | 0.7674 | +0.0222 |
-| F1 (macro) | 0.7464 | 0.7576 | +0.0111 |
-| F1 (weighted) | 0.9044 | 0.9071 | +0.0028 |
-| F1 (negative) | 0.8499 | 0.8546 | +0.0048 |
-| F1 (neutral) | 0.4281 | 0.4569 | **+0.0287** |
-| F1 (positive) | 0.9614 | 0.9613 | -0.0001 |
-| Recall (neutral) | 0.4224 | 0.4824 | **+0.0600** |
+| Accuracy | 0.9058 | 0.9039 | -0.0019 |
+| Precision (macro) | 0.7543 | 0.7486 | -0.0057 |
+| Recall (macro) | 0.7511 | 0.7692 | +0.0180 |
+| F1 (macro) | 0.7527 | 0.7580 | +0.0053 |
+| F1 (weighted) | 0.9056 | 0.9066 | +0.0010 |
+| F1 (negative) | 0.8470 | 0.8528 | +0.0058 |
+| F1 (neutral) | 0.4493 | 0.4607 | **+0.0114** |
+| F1 (positive) | 0.9619 | 0.9607 | -0.0012 |
+| Recall (neutral) | 0.4493 | 0.4969 | **+0.0476** |
 
-**RQ1 answer:** the baseline model reaches 90.5% overall accuracy, but performance is very uneven across classes — F1 is 0.96 for positive and 0.85 for negative, but only 0.43 for neutral. Overall accuracy alone substantially overstates how well the model handles the minority neutral class, since positive reviews dominate the test set (5,366 of 7,239 rows).
+**RQ1 answer:** the baseline model reaches 90.6% overall accuracy, but performance is very uneven across classes — F1 is 0.96 for positive and 0.85 for negative, but only 0.45 for neutral. Overall accuracy alone substantially overstates how well the model handles the minority neutral class, since positive reviews dominate the test set (5,366 of 7,239 rows).
 
-**RQ2 answer:** class weighting measurably improves neutral-class performance (F1 +0.029, recall +0.060) at essentially no cost to overall accuracy (+0.0001) or weighted F1 (+0.003). The improvement isn't free, though — it comes from trading a small amount of positive-class recall (-0.009) and negative-class precision (-0.006) for better neutral-class recall. Class balancing helps the specific problem it targets, but neutral reviews remain the hardest class to classify by a wide margin even after weighting.
+**RQ2 answer:** class weighting improves neutral-class performance (F1 +0.0114, recall +0.0476) and macro-F1 (+0.0053), but this run shows that gain coming at a small cost to overall accuracy (-0.0019) and macro precision (-0.0057), plus a drop in positive-class recall (-0.0116) and neutral-class precision (-0.0199). Class balancing still helps the specific problem it targets (neutral recall/F1), but neutral reviews remain the hardest class to classify by a wide margin even after weighting, and the size — and even the sign — of the accuracy/precision trade-off varies between runs of the same seed (see [Known Limitations](#known-limitations) and [Reproducibility Notes](#reproducibility-notes) below for why).
 
 Confusion matrices (rows = true label, columns = predicted label):
 
@@ -608,19 +608,19 @@ Confusion matrices (rows = true label, columns = predicted label):
 
 | | negative | neutral | positive |
 |---|---:|---:|---:|
-| **negative** | 1183 | 130 | 77 |
-| **neutral** | 144 | 204 | 135 |
-| **positive** | 67 | 136 | 5163 |
+| **negative** | 1168 | 144 | 78 |
+| **neutral** | 128 | 217 | 138 |
+| **positive** | 72 | 122 | 5172 |
 
 **Class-Weighted**
 
 | | negative | neutral | positive |
 |---|---:|---:|---:|
-| **negative** | 1205 | 128 | 57 |
-| **neutral** | 148 | 233 | 102 |
-| **positive** | 77 | 176 | 5113 |
+| **negative** | 1193 | 139 | 58 |
+| **neutral** | 139 | 240 | 104 |
+| **positive** | 76 | 180 | 5110 |
 
-The weighted model correctly classifies 29 more neutral reviews (233 vs. 204) than the baseline, at the cost of a few more negative/positive misclassifications elsewhere — consistent with the metrics above.
+The weighted model correctly classifies 23 more neutral reviews (240 vs. 217) than the baseline, at the cost of a few more negative/positive misclassifications elsewhere and a small (-0.0019) drop in overall accuracy — consistent with the metrics above.
 
 ---
 
@@ -871,8 +871,9 @@ support of Research Question 3.
 
 The current implementation has several limitations.
 
-- The neutral class remains difficult to classify even after class weighting: F1 only reaches 0.43–0.46 (vs. 0.85–0.96 for negative/positive) — see [Preliminary BERT Results](#preliminary-bert-results). Class balancing helps, but does not close this gap.
+- The neutral class remains difficult to classify even after class weighting: F1 only reaches 0.45–0.46 (vs. 0.85–0.96 for negative/positive) — see [Preliminary BERT Results](#preliminary-bert-results). Class balancing helps, but does not close this gap.
 - BERT training/evaluation results reflect a single random seed and a single 70/15/15 train/val/test split; no cross-validation or multiple-seed variance estimate has been run yet.
+- `src/train.py` sets `training.seed` but does not force full determinism (`TrainingArguments(full_determinism=True)`), and `fp16` mixed precision is auto-enabled on any CUDA GPU. As a result, two runs with the same `seed: 42` on a GPU are not bit-for-bit reproducible — re-running `experiments/bert_class_balancing.ipynb` will land close to, but not exactly on, the numbers in [Preliminary BERT Results](#preliminary-bert-results) (observed drift so far: accuracy within ~0.2 percentage points, neutral-class F1/recall deltas varying by roughly 2x run to run). The qualitative conclusion (class weighting helps the neutral class at some cost elsewhere) has held across runs; the exact decimal values and the size of the accuracy/precision trade-off have not.
 - `facebook/bart-large-cnn` supports a maximum input length of approximately 1,024 tokens.
 - Large product-review groups must therefore be filtered, prioritized, or truncated.
 - Helpful-vote prioritization may exclude less popular but still relevant observations.
@@ -900,6 +901,7 @@ To reproduce the results in [Preliminary BERT Results](#preliminary-bert-results
 2. Open `experiments/bert_class_balancing.ipynb` and run all cells top to bottom. It creates its own isolated virtual environment and installs dependencies there, so no manual environment setup is required, and it works the same way whether you're on a personal GPU machine, a shared/managed cluster, Colab, or Kaggle.
 3. The notebook runs `python src/train.py` + `python src/evaluate.py` once with `training.use_class_weights: false` (baseline) and once with `true` (class-weighted), then prints the comparison table shown above.
 4. Results are written to `outputs/bert_evaluation_{baseline,weighted}.{txt,json}` and `outputs/bert_sample_predictions_{baseline,weighted}.csv`, and model checkpoints to `models/bert_sentiment_{baseline,weighted}/` (not committed to GitHub — checkpoints are large).
+5. **Note:** re-running this on a GPU will not reproduce the exact numbers above bit-for-bit — see the non-determinism bullet in [Known Limitations](#known-limitations). Expect small variation in the decimal values, not an exact match.
 
 ### BART Outputs
 

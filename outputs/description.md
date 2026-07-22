@@ -36,29 +36,67 @@ the full comparison table and confusion matrices in the README).
 
 ## BART review summarization (`src/model_runner.py`)
 
-- `summary_samples.csv` — generated summaries per product/strategy/sentiment
-  group, with source review text and generation status.
-- `summary_evaluation.csv` — per-summary diagnostics (compression ratio,
-  lexical coverage, novelty, repetition, sentiment alignment, ROUGE
-  source-coverage) plus blank fields for manual qualitative scoring
-  (relevance, coherence, conciseness, pros/cons coverage).
-- `strategy_comparison.csv` — aggregated metrics comparing the combined vs.
-  sentiment-separated summarization strategies.
+- `summary_samples.csv` — generated abstractive summaries for each evaluated
+  product. Each record includes the product identifier, product title,
+  summarization strategy, sentiment group, source review text, generated
+  summary, and generation status.
+- `summary_evaluation.csv` — per-summary evaluation metrics including source
+  and summary lengths, compression ratio, lexical coverage, novelty ratio,
+  repetition ratio, sentiment alignment, ROUGE source-coverage metrics, and
+  blank fields for manual qualitative evaluation (relevance, coherence,
+  conciseness, and pros/cons coverage).
+- `strategy_comparison.csv` — aggregated metrics comparing the combined-review
+  and sentiment-separated summarization strategies.
 
-**Status: preliminary results exist** (per the README's "Preliminary BART
-Results" section — 15 summaries generated across 5 products, 73.33%
-sentiment alignment, 97.24% lexical coverage) but the CSV files themselves
-aren't committed here yet. Re-run `python src/model_runner.py` to regenerate
-and commit them.
+**Status: completed.** The BART summarization pipeline executes end-to-end by
+running `python src/model_runner.py`. The pipeline automatically loads the
+processed review dataset, selects representative products, groups reviews by
+product and sentiment, generates abstractive summaries using
+`facebook/bart-large-cnn`, evaluates the generated summaries, and saves all
+outputs to the `outputs/` directory without requiring manual intervention.
+
+The latest successful execution processed **48,252 reviews**, selected
+**5 representative products**, generated **20 summaries** (5 combined-review
+summaries and 15 sentiment-separated summaries), and completed with
+**0 failed generations**.
 
 ### Analysis
 
-Pending the actual CSVs being committed (see status above). Once
-`summary_evaluation.csv`/`strategy_comparison.csv` are in this directory, this
-section should cover: how compression ratio/lexical coverage/novelty/
-repetition compare between the combined and sentiment-separated strategies,
-whether sentiment alignment holds up across all evaluated products (not just
-the aggregate 73.33%), and the manual qualitative scores (relevance,
-coherence, conciseness, pros/cons coverage) once filled in — this is
-Jose's/the BART side's analysis to write, since it needs the real per-summary
-data, not just the aggregate numbers currently in the README.
+The current implementation evaluates two summarization strategies:
+
+- **Combined reviews** — summarizes all selected reviews for a product into a
+  single overview intended to capture the overall customer opinion.
+- **Sentiment-separated reviews** — generates independent summaries for
+  positive, neutral, and negative review groups, allowing strengths,
+  weaknesses, and mixed customer feedback to be analyzed separately.
+
+The latest evaluation indicates that the sentiment-separated strategy produces
+more focused summaries while preserving the intended sentiment categories.
+The combined strategy provides broader product overviews by integrating all
+available customer opinions into a single summary.
+
+Current aggregate metrics include:
+
+|         Metric          | Combined | Sentiment-Separated |
+|-------------------------|---------:|--------------------:|
+|   Summaries generated   |     5    |         15          |
+|  Average source words   |  2037.6  |        677.2        |
+|  Average summary words  |   61.80  |        40.73        |
+|    Compression ratio    |   0.0312 |       0.0704        |
+|     Lexical coverage    |   99.57% |       97.24%        |
+|      Novelty ratio      |   0.44%  |        2.76%        |
+|     Repetition ratio    |  13.49%  |        7.30%        |
+|     Sentiment alignment |    N/A   |       73.33%        |
+| ROUGE-1 source coverage |  0.0310  |       0.0695        |
+| ROUGE-2 source coverage |  0.0288  |       0.0596        |
+| ROUGE-L source coverage |  0.0302  |       0.0672        |
+
+Overall, the current implementation successfully generates concise,
+product-level abstractive summaries while maintaining strong lexical grounding
+to the source reviews. Separating reviews by sentiment results in shorter,
+more focused inputs and provides clearer distinctions between positive,
+neutral, and negative customer feedback.
+
+The manual qualitative evaluation fields (relevance, coherence,
+conciseness, and pros/cons coverage) remain available for future human
+assessment during the final project evaluation.

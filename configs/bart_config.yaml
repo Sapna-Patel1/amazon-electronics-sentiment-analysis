@@ -22,7 +22,7 @@ data:
   reviews_per_group: 3
 
   # Keep at 1 while testing on CPU.
-  sample_products: 5
+  sample_products: 20
 
 outputs:
   summary_path: outputs/summary_samples.csv

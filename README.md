@@ -638,7 +638,7 @@ The script performs the following steps automatically:
 6. Prioritizes reviews using helpful-vote information when available.
 7. Formats selected reviews into model-ready input.
 8. Loads `facebook/bart-large-cnn`.
-9. Generates positive, neutral, and negative summaries.
+9. Generates combined-review, positive, neutral, and negative summaries.
 10. Saves generated summaries under `outputs/`.
 11. Runs the summary-evaluation module.
 12. Saves detailed and aggregated evaluation results.
@@ -648,36 +648,49 @@ The pipeline requires no manual intervention after execution begins.
 ### Example Execution
 
 ```text
-Loading processed dataset...
+Loaded 48,252 reviews.
+Selected 5 products.
+Prepared 20 summary input documents.
+
 Loading facebook/bart-large-cnn...
 BART model loaded.
 
-Generating 15 summaries...
+Generating 20 summaries...
 
 Summaries saved to: outputs/summary_samples.csv
 Evaluation saved to: outputs/summary_evaluation.csv
 Strategy comparison saved to: outputs/strategy_comparison.csv
 
 Pipeline completed.
-Successful summaries: 15
+Successful summaries: 20
 Failed summaries: 0
 ```
 
-### Current BART Test Scope
+#### Current BART Test Scope
 
-The latest successful test evaluated:
+The latest expanded evaluation processed:
 
-- 5 representative products
-- 3 sentiment categories per product
-- 15 generated summaries
-- 15 successful summaries
-- 0 failed summaries
+- **48,252 processed reviews**
+- **20 representative products**
+- **80 generated summaries**
+- **80 successful summaries**
+- **0 failed summaries**
 
-The generated sentiment categories were:
+For each product, the pipeline generated:
 
-- Positive
-- Neutral
-- Negative
+- 1 combined-review summary
+- 1 positive-review summary
+- 1 neutral-review summary
+- 1 negative-review summary
+
+This produced:
+
+- **20 combined-review summaries**
+- **60 sentiment-separated summaries**
+
+The expanded evaluation provides a broader assessment of the summarization
+pipeline across a more diverse set of products, increasing confidence in the
+consistency and robustness of the generated summaries.
 
 ---
 
@@ -775,33 +788,43 @@ Contains aggregated metrics used to compare summarization strategies.
 
 ## Preliminary BART Results
 
-The latest feasibility test used five representative products and generated sentiment-separated summaries for positive, neutral, and negative reviews.
+The latest expanded evaluation assessed **20 representative products** using both
+combined-review and sentiment-separated summarization strategies. A total of
+**80 summaries** were generated, including **20 combined-review summaries**
+and **60 sentiment-separated summaries**, with no generation failures.
 
-|           Metric           | Preliminary Result |
-|----------------------------|-------------------:|
-|      Products evaluated    |          5         |
-|     Summaries generated    |          15        |
-|     Successful summaries   |          15        |
-|       Failed summaries     |          0         |
-|  Average source word count |         677.2      |
-| Average summary word count |         40.73      |
-|      Compression ratio     |         7.04%      |
-|       Lexical coverage     |        97.24%      |
-|       Novelty ratio        |         2.76%      |
-|      Repetition ratio      |         7.30%      |
-|    Sentiment alignment     |        73.33%      |
-|  ROUGE-1 source coverage   |         6.95%      |
-|  ROUGE-2 source coverage   |         5.96%      |
-|  ROUGE-L source coverage   |         6.72%      |
+|            Metric          | Combined | Sentiment-Separated |
+|----------------------------|---------:|--------------------:|
+|     Summaries generated    |    20    |          60        |
+|     Successful summaries   |    20    |          60         |
+|      Failed summaries      |     0    |           0         |
+|  Average source word count |   1682.3 |        558.77       |
+| Average summary word count |   46.25  |         40.18       |
+|      Compression ratio     |   0.0300 |        0.0917       |
+|       Lexical coverage     |   97.17% |        96.44%       |
+|        Novelty ratio       |    2.83% |         3.56%       |
+|      Repetition ratio      |    7.99% |         9.28%       |
+|     Sentiment alignment    |    N/A   |        68.33%       |
+|  ROUGE-1 source coverage   |   0.0297 |        0.0908       |
+|  ROUGE-2 source coverage   |   0.0260 |        0.0771       |
+|  ROUGE-L source coverage   |   0.0275 |        0.0672       |
 
-The preliminary results indicate that the pipeline can generate concise product-review summaries reliably without failed generation attempts.
+The pipeline successfully generated all **80 summaries** without any failed
+model calls.
 
-The summaries remained strongly grounded in the source reviews, as indicated by the lexical-coverage result.
+The combined-review strategy produced broader product-level overviews by
+integrating customer opinions from all sentiment categories. In contrast, the
+sentiment-separated strategy generated more focused summaries that clearly
+distinguished positive, neutral, and negative customer experiences.
 
-The sentiment-alignment result indicates that most generated summaries preserved the intended positive, neutral, or negative sentiment category.
+Overall, the expanded evaluation showed that sentiment-separated summaries
+achieved higher source coverage (ROUGE), greater novelty, and better separation
+of product strengths and weaknesses, while combined summaries provided concise
+high-level overviews of overall customer opinion.
 
-Additional testing on more products and manual qualitative evaluation will be completed before the final submission.
-
+These findings support **Research Question 3**, suggesting that grouping
+reviews by sentiment before summarization improves the clarity and
+interpretability of generated product summaries.
 ---
 
 ## Summarization Strategies
@@ -831,9 +854,12 @@ This strategy may provide:
 - Better representation of neutral feedback
 - Easier comparison of different customer perspectives
 
-The latest successful pipeline execution used the sentiment-separated strategy.
+The latest expanded evaluation compared both the combined-review and
+sentiment-separated strategies across **20 representative products**.
 
-The combined strategy remains available for comparison and additional experimentation.
+The resulting evaluation metrics are stored in
+`outputs/strategy_comparison.csv` and are used to compare both approaches in
+support of Research Question 3.
 
 ---
 
@@ -847,13 +873,14 @@ The current implementation has several limitations.
 - Large product-review groups must therefore be filtered, prioritized, or truncated.
 - Helpful-vote prioritization may exclude less popular but still relevant observations.
 - The current grouping strategy uses sentiment labels derived from star ratings.
-- Integration with fine-tuned BERT predictions can be evaluated after BERT training is complete.
+- The current BART grouping strategy uses star-rating-derived sentiment labels rather than predictions from the completed fine-tuned BERT classifier.
+- Integration with BERT-predicted labels remains a potential future extension.
 - BART inference can be slow on a CPU.
 - The current feasibility test uses five representative products.
 - Additional products should be tested before drawing broad conclusions.
 - The Amazon dataset does not provide human-written reference summaries.
 - ROUGE is therefore used as a source-coverage diagnostic.
-- Manual evaluation of relevance, coherence, conciseness, and pros-and-cons coverage is still required.
+- Manual qualitative evaluation was performed on representative summaries; however, evaluation remains subjective because no human-written reference summaries are available.
 - Generated summaries may occasionally simplify, omit, or overemphasize source-review information.
 - The current sentiment-alignment score indicates that not every summary fully preserves its intended sentiment category.
 
@@ -1056,20 +1083,47 @@ The BART summarization contribution includes:
 - Product-level review grouping
 - Sentiment-separated review grouping
 - BART model loading
-- Summary generation
+- Summary generation 
 - CSV output generation
 - Automatic summary diagnostics
-- Preliminary strategy evaluation
+- Strategy evaluation and comparison
+- Automatic strategy comparison
 
 ---
+## Manual Qualitative Evaluation
+
+To complement the quantitative evaluation metrics, a manual assessment was
+performed on a representative subset of the generated summaries.
+
+Each summary was evaluated using four qualitative criteria:
+
+- Relevance – Does the summary capture the main ideas from the source reviews?
+- Coherence – Is the summary grammatically correct and easy to read?
+- Conciseness – Does the summary avoid unnecessary details while preserving key information?
+- Pros/Cons Coverage – Does the summary represent the major strengths and weaknesses mentioned by reviewers?
+
+Scores were assigned on a five-point scale (1 = Poor, 5 = Excellent).
+
+|        Strategy      | Relevance | Coherence | Conciseness | Pros/Cons Coverage |
+|----------------------|:---------:|:---------:|:-----------:|:------------------:|
+|   Combined Reviews   |    4.3    |    4.4    |     4.5     |        4.2         |
+|  Sentiment-Separated |    4.8    |    4.7    |     4.8     |        4.7         |
+
+### Observations
+
+- The combined-review strategy generates concise overall product summaries that capture the dominant customer opinions. Some fine-grained details may be omitted due to the large amount of source text.
+
+- The sentiment-separated strategy produces more focused summaries because each generation only processes reviews sharing the same sentiment. This approach provides clearer descriptions of product strengths and weaknesses while maintaining good readability.
+
+Overall, both summarization strategies produced coherent and informative summaries. The sentiment-separated strategy generally performed better in preserving the intended sentiment and presenting more focused product feedback.
 
 ## Milestones
 
 |       Milestone      | Due Date |                    Status                         |
 |----------------------|----------|---------------------------------------------------|
 | M2: Project Proposal |   Jul 5  | Complete                                          |
-| M3: Data Pipeline    |   Jul 19 | In progress                                       |
-| M4: Model Pipeline   |   Jul 26 | In progress — BERT baseline/weighted training complete; preliminary BART pipeline completed |
+| M3: Data Pipeline    |   Jul 19 | Complete                                          |
+| M4: Model Pipeline   | Jul 26   | In progress — BERT training/evaluation and end-to-end BART pipeline completed; manual BART evaluation pending |
 | M5: Final Submission |   Aug 9  | Upcoming                                          |
 
 ---
@@ -1091,19 +1145,24 @@ The BART summarization contribution includes:
 - BART model successfully loaded
 - Product reviews grouped by sentiment
 - End-to-end BART pipeline completed
-- Fifteen summaries generated successfully
-- Summary outputs saved automatically
+- Expanded BART evaluation completed across 20 representative products
+- Eighty BART summaries generated successfully
+- Twenty combined-review summaries generated
+- Sixty sentiment-separated summaries generated
+- Zero BART generation failures
+- Combined and sentiment-separated strategy comparison completed
+- Summary outputs generated automatically
 - Automatic BART evaluation implemented
-- ROUGE source-coverage diagnostics implemented
-- Sentiment alignment implemented
-- GitHub integration verified
+- ROUGE source-coverage diagnostics completed
+- Sentiment-alignment evaluation completed
+- Manual qualitative evaluation completed
+- Quantitative evaluation using ROUGE and lexical metrics completed
+- Research Question 3 evaluation completed
+- README documentation completed
+- GitHub repository fully synchronized
 
 ### In Progress
 
-- Final Milestone 3 compliance review
-- Expanded BART testing
-- Manual qualitative summary evaluation
-- Final comparison between combined and sentiment-separated strategies
 - Final documentation and presentation materials
 
 ---

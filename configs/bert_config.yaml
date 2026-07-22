@@ -25,3 +25,4 @@ data:
 outputs:
   model_dir: models/bert_sentiment
   results_dir: outputs/
+  num_sample_predictions: 10

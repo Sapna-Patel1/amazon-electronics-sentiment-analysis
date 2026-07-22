@@ -20,10 +20,12 @@ re-running anything.
 Re-run `experiments/bert_class_balancing.ipynb` to reproduce (also regenerates
 the full comparison table and confusion matrices in the README).
 
-The full RQ1/RQ2 analysis lives in the README's
+The full RQ1/RQ2 numeric comparison (accuracy/F1 deltas, confusion matrices,
+and trade-off interpretation) lives in the README's
 [Preliminary BERT Results](../README.md#preliminary-bert-results) section
-(comparison table, confusion matrices, and interpretation) rather than
-duplicated here.
+rather than duplicated here. For how class weighting is actually computed
+(inverse class frequency via scikit-learn's `compute_class_weight`), see the
+README's [Step 4](../README.md#step-4-train-the-bert-sentiment-classifier).
 
 ## BART review summarization (`src/model_runner.py`)
 

@@ -6,7 +6,9 @@ Loads the saved model from models/bert_sentiment_{baseline,weighted}/
 currently selects), runs inference on the test split, and reports
 accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
 matrix, and a full classification report. Results are saved to
-outputs/bert_evaluation_{baseline,weighted}.{txt,json}.
+outputs/bert_evaluation_{baseline,weighted}.{txt,json}, and a random
+10-row sample of predictions (review text, actual sentiment, predicted
+sentiment) is saved to outputs/bert_sample_predictions_{baseline,weighted}.csv.
 
 Usage:
     python src/evaluate.py
@@ -56,6 +58,10 @@ def evaluate_model(
         - ``f1_per_class``: List of per-class F1 scores [negative, neutral, positive].
         - ``classification_report``: Full sklearn classification report string.
         - ``confusion_matrix``: Confusion matrix as a nested list.
+        - ``pred_labels``: Predicted integer labels, aligned index-for-index
+          with the input test_df.
+        - ``tokenizer``: The tokenizer used for inference (for callers that
+          need to reproduce exactly what the model saw, e.g. truncated text).
 
     Raises:
         FileNotFoundError: If model_dir doesn't exist (e.g. train.py hasn't
@@ -120,7 +126,58 @@ def evaluate_model(
         "f1_per_class": f1_per_class.tolist(),
         "classification_report": report,
         "confusion_matrix": cm.tolist(),
+        "pred_labels": pred_labels,
+        "tokenizer": tokenizer,
     }
+
+
+def save_sample_predictions(
+    test_df: pd.DataFrame,
+    pred_labels: list,
+    tokenizer,
+    max_length: int,
+    output_path: Path,
+    n: int = 10,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """Save a random sample of test-set predictions for manual inspection.
+
+    review_text is truncated to the same max_length the model actually saw
+    during inference (rather than the full raw text), so a reviewer isn't
+    misled by content past the truncation point when judging a prediction.
+
+    Args:
+        test_df: DataFrame with 'input_text' and 'label' columns (test split).
+        pred_labels: Predicted integer labels, aligned index-for-index with test_df.
+        tokenizer: Tokenizer used for inference, for truncating review_text consistently.
+        max_length: Maximum token length used during inference.
+        output_path: CSV path to write the sample to.
+        n: Number of rows to sample.
+        seed: Random seed for reproducible sampling.
+
+    Returns:
+        The sampled DataFrame that was written to output_path.
+    """
+    sample = test_df.sample(n=min(n, len(test_df)), random_state=seed)
+    sample_pred_labels = np.array(pred_labels)[sample.index]
+
+    truncated_text = [
+        tokenizer.decode(
+            tokenizer(text, truncation=True, max_length=max_length)["input_ids"],
+            skip_special_tokens=True,
+        )
+        for text in sample["input_text"]
+    ]
+
+    output = pd.DataFrame(
+        {
+            "review_text": truncated_text,
+            "actual_sentiment": [LABEL_NAMES[label] for label in sample["label"]],
+            "predicted_sentiment": [LABEL_NAMES[label] for label in sample_pred_labels],
+        }
+    )
+    output.to_csv(output_path, index=False)
+    return output
 
 
 def main():
@@ -178,6 +235,18 @@ def main():
             indent=2,
         )
     print(f"Structured results saved to {json_path}")
+
+    samples_path = results_dir / f"bert_sample_predictions_{variant}.csv"
+    save_sample_predictions(
+        test_df,
+        results["pred_labels"],
+        results["tokenizer"],
+        cfg["model"]["max_length"],
+        samples_path,
+        n=cfg["outputs"].get("num_sample_predictions", 10),
+        seed=cfg["training"]["seed"],
+    )
+    print(f"Sample predictions saved to {samples_path}")
 
 
 if __name__ == "__main__":

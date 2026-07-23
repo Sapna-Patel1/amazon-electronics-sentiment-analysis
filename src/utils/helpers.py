@@ -82,12 +82,18 @@ def split_data(
         ValueError: If any class in df["label"] has too few members to be
             stratified across all three splits.
     """
+    # With the default 70/15/15 split, sklearn's proportional rounding
+    # across the two chained stratified splits below needs at least 5 rows
+    # per class -- 3 or 4 rows reliably round a class down to 1 row in the
+    # second (val/test) split, which train_test_split then rejects with an
+    # opaque "least populated class" ValueError instead of this guard's
+    # clearer message.
     class_counts = df["label"].value_counts()
-    too_small = class_counts[class_counts < 3]
+    too_small = class_counts[class_counts < 5]
     if not too_small.empty:
         raise ValueError(
             "Cannot create a stratified train/validation/test split: "
-            f"label(s) {too_small.index.tolist()} have fewer than 3 rows "
+            f"label(s) {too_small.index.tolist()} have fewer than 5 rows "
             f"(counts: {too_small.to_dict()}). Increase the sample size or "
             "relax upstream filters (e.g. min_review_length) so every class "
             "has enough rows to appear in all three splits."

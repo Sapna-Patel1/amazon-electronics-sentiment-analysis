@@ -21,7 +21,14 @@ data:
   # Reviews included per sentiment group.
   reviews_per_group: 3
 
-  # Keep at 1 while testing on CPU.
+  # Word budget per sentiment section in the combined-strategy input, so
+  # right-side tokenizer truncation at generation time can't silently drop
+  # an entire section (positive, always ordered last) for products with
+  # enough reviews to exceed the model's ~1024-token input limit.
+  max_words_per_sentiment_section: 220
+
+  # Validated at this scale (see outputs/description.md, README's
+  # "Preliminary BART Results"). Reduce for a quick local smoke test.
   sample_products: 20
 
 outputs:

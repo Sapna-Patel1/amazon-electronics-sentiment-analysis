@@ -653,20 +653,20 @@ The pipeline requires no manual intervention after execution begins.
 
 ```text
 Loaded 48,252 reviews.
-Selected 5 products.
-Prepared 20 summary input documents.
+Selected 20 products.
+Prepared 80 summary input documents.
 
 Loading facebook/bart-large-cnn...
 BART model loaded.
 
-Generating 20 summaries...
+Generating 80 summaries...
 
 Summaries saved to: outputs/summary_samples.csv
 Evaluation saved to: outputs/summary_evaluation.csv
 Strategy comparison saved to: outputs/strategy_comparison.csv
 
 Pipeline completed.
-Successful summaries: 20
+Successful summaries: 80
 Failed summaries: 0
 ```
 
@@ -811,7 +811,7 @@ and **60 sentiment-separated summaries**, with no generation failures.
 |     Sentiment alignment    |    N/A   |        68.33%       |
 |  ROUGE-1 source coverage   |   0.0297 |        0.0908       |
 |  ROUGE-2 source coverage   |   0.0260 |        0.0771       |
-|  ROUGE-L source coverage   |   0.0275 |        0.0672       |
+|  ROUGE-L source coverage   |   0.0275 |        0.0864       |
 
 The pipeline successfully generated all **80 summaries** without any failed
 model calls.

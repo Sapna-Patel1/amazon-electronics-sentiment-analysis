@@ -10,6 +10,11 @@ outputs/bert_evaluation_{baseline,weighted}.{txt,json}, and a random
 10-row sample of predictions (review text, actual sentiment, predicted
 sentiment) is saved to outputs/bert_sample_predictions_{baseline,weighted}.csv.
 
+This module covers BERT evaluation only. BART summary evaluation (ROUGE,
+compression ratio, lexical coverage, sentiment alignment, and manual
+qualitative scoring) lives in summary_evaluation.py and is invoked directly
+from model_runner.py rather than from here.
+
 Usage:
     python src/evaluate.py
 """

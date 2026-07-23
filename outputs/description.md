@@ -68,28 +68,15 @@ more focused summaries while preserving the intended sentiment categories.
 The combined strategy provides broader product overviews by integrating all
 available customer opinions into a single summary.
 
-Current aggregate metrics include:
-
-|         Metric          | Combined | Sentiment-Separated |
-|-------------------------|---------:|--------------------:|
-|   Summaries generated   |     20   |         60          |
-|  Average source words   |  2037.6  |        677.2        |
-|  Average summary words  |   61.80  |        40.73        |
-|    Compression ratio    |   0.0312 |       0.0704        |
-|     Lexical coverage    |   99.57% |       97.24%        |
-|      Novelty ratio      |   0.44%  |        2.76%        |
-|     Repetition ratio    |  13.49%  |        7.30%        |
-|     Sentiment alignment |    N/A   |       73.33%        |
-| ROUGE-1 source coverage |  0.0310  |       0.0695        |
-| ROUGE-2 source coverage |  0.0288  |       0.0596        |
-| ROUGE-L source coverage |  0.0302  |       0.0672        |
-
-Overall, the current implementation successfully generates concise,
-product-level abstractive summaries while maintaining strong lexical grounding
-to the source reviews. Separating reviews by sentiment results in shorter,
-more focused inputs and provides clearer distinctions between positive,
-neutral, and negative customer feedback.
+The full aggregate metrics table (compression ratio, lexical coverage,
+novelty/repetition ratios, sentiment alignment, ROUGE source-coverage) and
+the RQ3 discussion live in the README's
+[Preliminary BART Results](../README.md#preliminary-bart-results) section
+rather than duplicated here, so there's one source of truth as the pipeline
+is re-run — see `outputs/strategy_comparison.csv` for the underlying numbers.
 
 The manual qualitative evaluation fields (relevance, coherence,
-conciseness, and pros/cons coverage) remain available for future human
-assessment during the final project evaluation.
+conciseness, and pros/cons coverage) have been scored on a representative
+subset — see the README's
+[Manual Qualitative Evaluation](../README.md#manual-qualitative-evaluation)
+section.

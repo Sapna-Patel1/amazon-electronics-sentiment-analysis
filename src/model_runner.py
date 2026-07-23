@@ -135,7 +135,8 @@ def format_review(
         else ""
     ).strip()
 
-    rating = row.get(rating_column, "")
+    rating_value = row.get(rating_column, "")
+    rating = rating_value if pd.notna(rating_value) else "Unknown"
 
     if not title and not text:
         return ""
@@ -152,6 +153,21 @@ def format_review(
         sections.append(f"Text: {text}")
 
     return "\n".join(sections)
+
+
+def truncate_to_word_limit(text: str, max_words: int) -> tuple[str, bool]:
+    """
+    Truncate text to at most max_words words, on word boundaries.
+
+    Returns:
+        Tuple of (possibly truncated text, whether truncation occurred).
+    """
+    words = text.split()
+
+    if len(words) <= max_words:
+        return text, False
+
+    return " ".join(words[:max_words]), True
 
 
 def format_review_group(
@@ -240,6 +256,19 @@ def prepare_summary_inputs(
         )
 
         # Combined strategy.
+        #
+        # Each sentiment section is capped to a fixed word budget before
+        # concatenation. Without this, the combined document is truncated
+        # by the tokenizer's default right-side truncation at generation
+        # time -- since sections are always ordered negative/neutral/
+        # positive, that silently drops the positive section first (and
+        # often entirely) for any product with enough reviews to exceed
+        # the model's input-token limit, systematically biasing combined
+        # summaries toward negative/neutral content with no diagnostic.
+        max_words_per_section = int(
+            data_cfg.get("max_words_per_sentiment_section", 220)
+        )
+
         combined_sections = []
         combined_count = 0
 
@@ -254,6 +283,19 @@ def prepare_summary_inputs(
             )
 
             if formatted_text:
+                formatted_text, was_truncated = truncate_to_word_limit(
+                    formatted_text,
+                    max_words_per_section,
+                )
+
+                if was_truncated:
+                    print(
+                        f"Warning: {sentiment} section for product "
+                        f"{product_id} exceeded {max_words_per_section} "
+                        "words and was truncated so all sentiment "
+                        "sections fit in the combined input."
+                    )
+
                 combined_sections.append(
                     f"{sentiment.upper()} REVIEWS\n{formatted_text}"
                 )

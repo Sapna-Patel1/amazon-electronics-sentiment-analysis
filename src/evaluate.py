@@ -224,36 +224,42 @@ def content_tokens(text: str) -> list[str]:
     ]
 
 
-def lexical_coverage(source: str, summary: str) -> float:
-    """Measure how much summary vocabulary appears in the source."""
-    source_words = set(content_tokens(source))
-    summary_words = set(content_tokens(summary))
+def lexical_coverage(source_words: set[str], summary_words: set[str]) -> float:
+    """Measure how much summary vocabulary appears in the source.
 
+    Args:
+        source_words: Content tokens (see content_tokens()) from the source text.
+        summary_words: Content tokens from the summary text.
+    """
     if not summary_words:
         return 0.0
 
     return len(source_words & summary_words) / len(summary_words)
 
 
-def novelty_ratio(source: str, summary: str) -> float:
-    """Measure summary vocabulary not copied from the source."""
-    source_words = set(content_tokens(source))
-    summary_words = set(content_tokens(summary))
+def novelty_ratio(source_words: set[str], summary_words: set[str]) -> float:
+    """Measure summary vocabulary not copied from the source.
 
+    Args:
+        source_words: Content tokens (see content_tokens()) from the source text.
+        summary_words: Content tokens from the summary text.
+    """
     if not summary_words:
         return 0.0
 
     return len(summary_words - source_words) / len(summary_words)
 
 
-def repetition_ratio(summary: str) -> float:
-    """Measure repeated content words in the summary."""
-    words = content_tokens(summary)
+def repetition_ratio(summary_words: list[str]) -> float:
+    """Measure repeated content words in the summary.
 
-    if not words:
+    Args:
+        summary_words: Content tokens (see content_tokens()) from the summary text.
+    """
+    if not summary_words:
         return 0.0
 
-    counts = Counter(words)
+    counts = Counter(summary_words)
 
     repeated = sum(
         count - 1
@@ -261,7 +267,7 @@ def repetition_ratio(summary: str) -> float:
         if count > 1
     )
 
-    return repeated / len(words)
+    return repeated / len(summary_words)
 
 
 def sentiment_alignment(
@@ -344,6 +350,14 @@ def evaluate_summaries(
         source_count = len(tokenize(source))
         summary_count = len(tokenize(summary))
 
+        # Computed once and reused across lexical_coverage/novelty_ratio/
+        # repetition_ratio below, rather than each of those independently
+        # re-running content_tokens() (regex tokenize + stopword filter)
+        # on the same source/summary strings.
+        summary_content_words = content_tokens(summary)
+        source_word_set = set(content_tokens(source))
+        summary_word_set = set(summary_content_words)
+
         source_compound = analyzer.polarity_scores(
             source
         )["compound"]
@@ -367,15 +381,15 @@ def evaluate_summaries(
         )
 
         lexical_coverages.append(
-            lexical_coverage(source, summary)
+            lexical_coverage(source_word_set, summary_word_set)
         )
 
         novelty_ratios.append(
-            novelty_ratio(source, summary)
+            novelty_ratio(source_word_set, summary_word_set)
         )
 
         repetition_ratios.append(
-            repetition_ratio(summary)
+            repetition_ratio(summary_content_words)
         )
 
         source_sentiments.append(source_compound)

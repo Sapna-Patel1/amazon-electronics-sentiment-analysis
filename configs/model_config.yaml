@@ -61,6 +61,15 @@ bart:
     # token-level truncation check that covers both strategies.
     max_words_per_sentiment_section: 220
 
+    # Word budget for the sentiment-separated strategy's single-sentiment
+    # input. Larger than max_words_per_sentiment_section above since this
+    # strategy has one section per row (no concatenation competing for the
+    # same token budget), but still capped -- verified 9 of 60
+    # sentiment-separated rows exceeded 1024 tokens with no cap at all.
+    # Sized with margin for spec-heavy review text (product numbers,
+    # prices, ratings) tokenizing well above the ~1.3 tokens/word average.
+    max_words_per_separated_group: 400
+
     # Validated at this scale (see outputs/description.md, README's
     # "Preliminary BART Results"). Reduce for a quick local smoke test.
     sample_products: 20

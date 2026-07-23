@@ -427,9 +427,7 @@ def generate_summaries(
         # spec/number-heavy review text, so this is the actual signal that
         # the tokenizer's own truncation (inside summarizer.summarize())
         # is about to silently drop content.
-        true_token_count = len(
-            summarizer.tokenizer(row["combined_reviews"])["input_ids"]
-        )
+        true_token_count = summarizer.count_tokens(row["combined_reviews"])
 
         if true_token_count > max_input_tokens:
             print(

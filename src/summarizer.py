@@ -37,6 +37,19 @@ class BartSummarizer:
 
         print("BART model loaded.\n")
 
+    def count_tokens(self, text: str) -> int:
+        """
+        Count the true (untruncated) number of tokens BART would see for this text.
+
+        Args:
+            text: Input text to tokenize.
+
+        Returns:
+            Token count with no truncation applied.
+        """
+        cleaned_text = str(text).strip()
+        return len(self.tokenizer(cleaned_text)["input_ids"])
+
     def summarize(
         self,
         text: str,

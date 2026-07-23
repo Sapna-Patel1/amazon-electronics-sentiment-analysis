@@ -19,12 +19,12 @@ from pathlib import Path
 import pandas as pd
 
 from data_loader import load_processed_data
-from summarizer import BartSummarizer
-from summary_evaluation import (
+from evaluate import (
     create_strategy_comparison,
     evaluate_summaries,
     save_evaluation_outputs,
 )
+from summarizer import BartSummarizer
 from utils import load_config
 
 
@@ -490,7 +490,7 @@ def save_summary_results(
 
 def main() -> None:
     """Run the full BART summarization and evaluation pipeline."""
-    cfg = load_config("configs/bart_config.yaml")
+    cfg = load_config()["bart"]
 
     print("Loading processed dataset...")
 

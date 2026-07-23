@@ -118,8 +118,7 @@ These labels are used for:
 amazon-electronics-sentiment-analysis/
 ├── configs/
 │   ├── data_config.yaml          # Sampling, split, and preprocessing settings
-│   ├── bert_config.yaml          # BERT hyperparameters and paths
-│   └── bart_config.yaml          # BART generation parameters and paths
+│   └── model_config.yaml         # BERT hyperparameters + BART generation params ("bert"/"bart" sections)
 │
 ├── data/
 │   ├── raw/
@@ -156,10 +155,9 @@ amazon-electronics-sentiment-analysis/
 │   ├── data_loader.py            # Sample raw review and metadata data
 │   ├── preprocess.py             # Clean, label, and split sampled data
 │   ├── train.py                  # BERT fine-tuning script
-│   ├── evaluate.py               # Accuracy, F1, and confusion matrix
+│   ├── evaluate.py               # BERT metrics (accuracy, F1, confusion matrix) + BART summary evaluation
 │   ├── model_runner.py           # BART summarization pipeline
 │   ├── summarizer.py             # BART summary generation
-│   ├── summary_evaluation.py     # BART summary evaluation
 │   └── utils/
 │       ├── __init__.py           # Configuration loading
 │       └── helpers.py            # Shared text cleaning and label mapping
@@ -178,7 +176,7 @@ amazon-electronics-sentiment-analysis/
 data/processed/preprocessed_reviews.csv
 ```
 
-- If the processed dataset is moved or renamed, the path in `configs/bart_config.yaml` must also be updated.
+- If the processed dataset is moved or renamed, the path in `configs/model_config.yaml`'s `bart.data.processed_path` must also be updated.
 
 ---
 
@@ -361,9 +359,11 @@ Contains configuration for the data sampling and preprocessing pipeline (`data_l
 - minimum review length (short reviews are dropped)
 - random seed
 
-### `bert_config.yaml`
+### `model_config.yaml`
 
-The BERT configuration file contains settings for sentiment classification, including:
+Both models' hyperparameters and paths live in this single file, under top-level `bert:` and `bart:` sections.
+
+**`bert:`** contains settings for sentiment classification, including:
 
 - Pretrained model name
 - Maximum sequence length
@@ -374,16 +374,11 @@ The BERT configuration file contains settings for sentiment classification, incl
 - Weight decay
 - Random seed
 - Dataset paths
-- Sentiment-label mapping
 - Model-checkpoint directory
 - Evaluation-output directory
 - Class-balancing parameters
 
----
-
-### `bart_config.yaml`
-
-The BART configuration file contains settings for review summarization, including:
+**`bart:`** contains settings for review summarization, including:
 
 - Pretrained summarization model
 - Processed dataset path
@@ -406,17 +401,18 @@ The BART configuration file contains settings for review summarization, includin
 - Evaluation-output path
 - Strategy-comparison path
 
-The current processed dataset path is:
+The current processed dataset path (used by both `bert.data` and `bart.data`) is:
 
 ```text
 data/processed/preprocessed_reviews.csv
 ```
 
-If the dataset is moved or renamed, update the following configuration value:
+If the dataset is moved or renamed, update the following configuration value under `bart:`:
 
 ```yaml
-data:
-  processed_path: data/processed/preprocessed_reviews.csv
+bart:
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
 ```
 
 ---
@@ -544,7 +540,7 @@ The training script:
 - Fine-tunes `bert-base-uncased`.
 - Predicts negative, neutral, or positive sentiment.
 - Applies configurable training hyperparameters.
-- Supports a class-balancing experiment (RQ2): setting `training.use_class_weights: true` in `bert_config.yaml` weights the loss function by inverse class frequency (via scikit-learn's `compute_class_weight(class_weight="balanced", ...)`, computed from the actual train-split label distribution), so mistakes on the minority neutral class are penalized more heavily during training.
+- Supports a class-balancing experiment (RQ2): setting `bert.training.use_class_weights: true` in `configs/model_config.yaml` weights the loss function by inverse class frequency (via scikit-learn's `compute_class_weight(class_weight="balanced", ...)`, computed from the actual train-split label distribution), so mistakes on the minority neutral class are penalized more heavily during training.
 - Saves the trained model checkpoint and tokenizer.
 
 Model checkpoints are saved under:
@@ -634,7 +630,7 @@ python src/model_runner.py
 
 The script performs the following steps automatically:
 
-1. Loads the processed review dataset specified in `configs/bart_config.yaml`.
+1. Loads the processed review dataset specified in `configs/model_config.yaml`'s `bart` section.
 2. Validates the required product, review, rating, and sentiment columns.
 3. Selects representative products.
 4. Groups reviews by product.
@@ -709,7 +705,7 @@ python src/model_runner.py
 The evaluation logic is implemented in:
 
 ```text
-src/summary_evaluation.py
+src/evaluate.py
 ```
 
 The module calculates:
@@ -916,10 +912,10 @@ To reproduce the current BART outputs:
 data/processed/preprocessed_reviews.csv
 ```
 
-5. Confirm the same path is listed in:
+5. Confirm the same path is listed under `bart.data.processed_path` in:
 
 ```text
-configs/bart_config.yaml
+configs/model_config.yaml
 ```
 
 6. Run:
@@ -1022,11 +1018,12 @@ Confirm that the current file exists:
 data/processed/preprocessed_reviews.csv
 ```
 
-Then verify that `configs/bart_config.yaml` contains:
+Then verify that `configs/model_config.yaml` contains:
 
 ```yaml
-data:
-  processed_path: data/processed/preprocessed_reviews.csv
+bart:
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
 ```
 
 ---
@@ -1049,7 +1046,7 @@ Using device: cpu
 
 This is expected because `facebook/bart-large-cnn` is a large transformer model.
 
-Reducing the number of products or reviews per group in `configs/bart_config.yaml` can reduce runtime during testing.
+Reducing the number of products or reviews per group in `configs/model_config.yaml`'s `bart` section can reduce runtime during testing.
 
 ---
 
@@ -1082,10 +1079,10 @@ The `docs/` directory contains supporting project documentation, including:
 
 The BART summarization contribution includes:
 
-- `configs/bart_config.yaml`
+- `configs/model_config.yaml`'s `bart` section
 - `src/summarizer.py`
 - `src/model_runner.py`
-- `src/summary_evaluation.py`
+- BART evaluation functions in `src/evaluate.py`
 - Product-level review grouping
 - Sentiment-separated review grouping
 - BART model loading

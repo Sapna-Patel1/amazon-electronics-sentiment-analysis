@@ -14,6 +14,7 @@ The generated summaries and evaluation results are saved to CSV files.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -33,6 +34,20 @@ SENTIMENT_ORDER = {
     "neutral": 1,
     "positive": 2,
 }
+
+REVIEW_HEADER_PATTERN = re.compile(r"^Review \d+$", re.MULTILINE)
+
+
+def count_surviving_reviews(formatted_text: str) -> int:
+    """
+    Count how many reviews are actually present in (possibly truncated)
+    formatted text, by counting intact "Review N" header lines.
+
+    format_review_group's pre-truncation review count can overstate what
+    survives truncate_to_word_limit(), since truncation can drop one or
+    more whole reviews from the end of a section.
+    """
+    return len(REVIEW_HEADER_PATTERN.findall(formatted_text))
 
 
 def validate_columns(
@@ -335,7 +350,10 @@ def prepare_summary_inputs(
                 combined_sections.append(
                     f"{sentiment.upper()} REVIEWS\n{formatted_text}"
                 )
-                combined_count += review_count
+                # Recomputed from the (possibly truncated) text rather than
+                # trusting format_review_group's pre-truncation review_count,
+                # which can overstate what actually survived truncation.
+                combined_count += count_surviving_reviews(formatted_text)
 
         if combined_sections:
             output_rows.append(

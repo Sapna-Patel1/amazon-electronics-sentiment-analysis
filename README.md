@@ -798,16 +798,16 @@ and **60 sentiment-separated summaries**, with no generation failures.
 |     Summaries generated    |    20    |          60        |
 |     Successful summaries   |    20    |          60         |
 |      Failed summaries      |     0    |           0         |
-|  Average source word count |   1682.3 |        558.77       |
-| Average summary word count |   46.25  |         40.18       |
-|      Compression ratio     |   0.0300 |        0.0917       |
-|       Lexical coverage     |   97.17% |        96.44%       |
-|        Novelty ratio       |    2.83% |         3.56%       |
-|      Repetition ratio      |    7.99% |         9.28%       |
-|     Sentiment alignment    |    N/A   |        68.33%       |
-|  ROUGE-1 source coverage   |   0.0297 |        0.0908       |
-|  ROUGE-2 source coverage   |   0.0260 |        0.0771       |
-|  ROUGE-L source coverage   |   0.0275 |        0.0864       |
+|  Average source word count |   672.65 |        562.15       |
+| Average summary word count |   42.15  |         40.02       |
+|      Compression ratio     |   0.0625 |        0.0907       |
+|       Lexical coverage     |   97.59% |        96.35%       |
+|        Novelty ratio       |    2.41% |         3.65%       |
+|      Repetition ratio      |    7.91% |         9.30%       |
+|     Sentiment alignment    |    N/A   |        67.50%       |
+|  ROUGE-1 source coverage   |   0.0620 |        0.0898       |
+|  ROUGE-2 source coverage   |   0.0551 |        0.0762       |
+|  ROUGE-L source coverage   |   0.0580 |        0.0855       |
 
 The pipeline successfully generated all **80 summaries** without any failed
 model calls.
@@ -816,6 +816,19 @@ The combined-review strategy produced broader product-level overviews by
 integrating customer opinions from all sentiment categories. In contrast, the
 sentiment-separated strategy generated more focused summaries that clearly
 distinguished positive, neutral, and negative customer experiences.
+
+**Note on the combined-strategy numbers:** these reflect a fix to a
+truncation bug where the combined-strategy input (built by concatenating
+negative, then neutral, then positive review sections) could silently drop
+the positive section entirely for any product whose combined text exceeded
+BART's ~1024-token input limit -- verified against 18 of the 20 products in
+an earlier run. The fix caps each sentiment section to a bounded word budget
+before concatenation, which is why the average source word count for
+combined summaries dropped substantially (was 1682.3 words) and ROUGE
+source-coverage roughly doubled -- the input is now shorter, balanced across
+all three sentiments, and the summary covers a larger share of it. The
+sentiment-separated strategy was never affected by this bug and its numbers
+are essentially unchanged.
 
 Overall, the expanded evaluation showed that sentiment-separated summaries
 achieved higher source coverage (ROUGE), greater novelty, and better separation

@@ -49,9 +49,9 @@ product and sentiment, generates abstractive summaries using
 outputs to the `outputs/` directory without requiring manual intervention.
 
 The latest successful execution processed **48,252 reviews**, selected
-**5 representative products**, generated **20 summaries** (5 combined-review
-summaries and 15 sentiment-separated summaries), and completed with
-**0 failed generations**.
+**20 representative products**, generated **80 summaries**
+(20 combined-review summaries and 60 sentiment-separated summaries),
+and completed with **0 failed generations**.
 
 ### Analysis
 
@@ -72,7 +72,7 @@ Current aggregate metrics include:
 
 |         Metric          | Combined | Sentiment-Separated |
 |-------------------------|---------:|--------------------:|
-|   Summaries generated   |     5    |         15          |
+|   Summaries generated   |     20   |         60          |
 |  Average source words   |  2037.6  |        677.2        |
 |  Average summary words  |   61.80  |        40.73        |
 |    Compression ratio    |   0.0312 |       0.0704        |

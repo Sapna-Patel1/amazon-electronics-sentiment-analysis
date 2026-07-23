@@ -881,7 +881,7 @@ The current implementation has several limitations.
 - The current BART grouping strategy uses star-rating-derived sentiment labels rather than predictions from the completed fine-tuned BERT classifier.
 - Integration with BERT-predicted labels remains a potential future extension.
 - BART inference can be slow on a CPU.
-- The current feasibility test uses five representative products.
+- The expanded feasibility evaluation uses 20 representative products. Although this provides broader coverage than the initial pilot, the evaluation remains limited relative to the full   Amazon Electronics dataset.
 - Additional products should be tested before drawing broad conclusions.
 - The Amazon dataset does not provide human-written reference summaries.
 - ROUGE is therefore used as a source-coverage diagnostic.
@@ -1129,7 +1129,7 @@ Overall, both summarization strategies produced coherent and informative summari
 |----------------------|----------|---------------------------------------------------|
 | M2: Project Proposal |   Jul 5  | Complete                                          |
 | M3: Data Pipeline    |   Jul 19 | Complete                                          |
-| M4: Model Pipeline   | Jul 26   | In progress — BERT training/evaluation and end-to-end BART pipeline completed; manual BART evaluation pending |
+| M4: Model Pipeline   |   Jul 26 | Complete                                          |
 | M5: Final Submission |   Aug 9  | Upcoming                                          |
 
 ---

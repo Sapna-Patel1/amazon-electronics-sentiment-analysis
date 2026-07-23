@@ -171,7 +171,8 @@ def truncate_to_word_limit(text: str, max_words: int) -> tuple[str, bool]:
         Tuple of (possibly truncated text, whether truncation occurred).
     """
     lines = text.split("\n")
-    total_words = sum(len(line.split()) for line in lines)
+    line_words = [line.split() for line in lines]
+    total_words = sum(len(words) for words in line_words)
 
     if total_words <= max_words:
         return text, False
@@ -179,9 +180,7 @@ def truncate_to_word_limit(text: str, max_words: int) -> tuple[str, bool]:
     kept_lines = []
     remaining = max_words
 
-    for line in lines:
-        words = line.split()
-
+    for line, words in zip(lines, line_words):
         if not words:
             if remaining > 0:
                 kept_lines.append(line)

@@ -1120,6 +1120,16 @@ Each summary was evaluated using four qualitative criteria:
 
 Scores were assigned on a five-point scale (1 = Poor, 5 = Excellent).
 
+**Note:** these scores were assigned against an earlier generation run, before
+the combined-strategy truncation-bias fix described in
+[Preliminary BART Results](#preliminary-bart-results) (that fix changed
+which content the combined-strategy summaries were built from — previously
+the positive-sentiment section was silently dropped for most products).
+The scores below have not yet been re-assigned against the current,
+regenerated `outputs/summary_samples.csv`, so treat the **Combined Reviews**
+row as pending re-evaluation; **Sentiment-Separated** was unaffected by the
+fix and its scores remain valid.
+
 |        Strategy      | Relevance | Coherence | Conciseness | Pros/Cons Coverage |
 |----------------------|:---------:|:---------:|:-----------:|:------------------:|
 |   Combined Reviews   |    4.3    |    4.4    |     4.5     |        4.2         |

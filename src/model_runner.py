@@ -136,14 +136,16 @@ def format_review(
     ).strip()
 
     rating_value = row.get(rating_column, "")
-    rating = rating_value if pd.notna(rating_value) else "Unknown"
+    rating_line = (
+        f"Rating: {rating_value}/5" if pd.notna(rating_value) else "Rating: Unknown"
+    )
 
     if not title and not text:
         return ""
 
     sections = [
         f"Review {review_number}",
-        f"Rating: {rating}/5",
+        rating_line,
     ]
 
     if title:
@@ -157,17 +159,44 @@ def format_review(
 
 def truncate_to_word_limit(text: str, max_words: int) -> tuple[str, bool]:
     """
-    Truncate text to at most max_words words, on word boundaries.
+    Truncate text to at most max_words words, preferring line boundaries.
+
+    Splits on "\\n" first so the "Review N / Rating / Title / Text" layout
+    built by format_review (and the blank-line separators between reviews
+    from format_review_group) survive truncation instead of being collapsed
+    into one space-joined blob. Only splits mid-line when a single line's
+    word count would overflow the remaining budget.
 
     Returns:
         Tuple of (possibly truncated text, whether truncation occurred).
     """
-    words = text.split()
+    lines = text.split("\n")
+    total_words = sum(len(line.split()) for line in lines)
 
-    if len(words) <= max_words:
+    if total_words <= max_words:
         return text, False
 
-    return " ".join(words[:max_words]), True
+    kept_lines = []
+    remaining = max_words
+
+    for line in lines:
+        words = line.split()
+
+        if not words:
+            if remaining > 0:
+                kept_lines.append(line)
+            continue
+
+        if len(words) <= remaining:
+            kept_lines.append(line)
+            remaining -= len(words)
+        elif remaining > 0:
+            kept_lines.append(" ".join(words[:remaining]))
+            remaining = 0
+        else:
+            break
+
+    return "\n".join(kept_lines), True
 
 
 def format_review_group(
@@ -239,6 +268,10 @@ def prepare_summary_inputs(
         sample_products=int(data_cfg["sample_products"]),
     )
 
+    # Word budget per sentiment section in the combined-strategy input (see
+    # the comment below). Constant across products, read once here.
+    max_words_per_section = int(data_cfg["max_words_per_sentiment_section"])
+
     output_rows = []
 
     for product_id in selected_products:
@@ -265,10 +298,14 @@ def prepare_summary_inputs(
         # often entirely) for any product with enough reviews to exceed
         # the model's input-token limit, systematically biasing combined
         # summaries toward negative/neutral content with no diagnostic.
-        max_words_per_section = int(
-            data_cfg.get("max_words_per_sentiment_section", 220)
-        )
-
+        #
+        # This word budget is only an approximation of the token budget
+        # that actually matters (spec-heavy electronics review text can
+        # run well above 1.3 tokens/word), so it reduces but doesn't
+        # guarantee eliminating the underlying truncation risk. The actual
+        # ground-truth check (comparing real token counts against
+        # model.max_input_tokens, for both strategies) happens in
+        # generate_summaries() below, right before generation.
         combined_sections = []
         combined_count = 0
 
@@ -382,12 +419,29 @@ def generate_summaries(
             f"{row['sentiment']}"
         )
 
+        max_input_tokens = int(model_cfg["max_input_tokens"])
+
+        # Ground-truth truncation check using the real BART tokenizer, on
+        # every row regardless of strategy. The combined-strategy word
+        # budget above only approximates this and can undershoot on
+        # spec/number-heavy review text, so this is the actual signal that
+        # the tokenizer's own truncation (inside summarizer.summarize())
+        # is about to silently drop content.
+        true_token_count = len(
+            summarizer.tokenizer(row["combined_reviews"])["input_ids"]
+        )
+
+        if true_token_count > max_input_tokens:
+            print(
+                f"Warning: input exceeds {max_input_tokens} tokens "
+                f"({true_token_count} tokens) and will be truncated "
+                "by the tokenizer at generation time."
+            )
+
         try:
             summary = summarizer.summarize(
                 text=row["combined_reviews"],
-                max_input_tokens=int(
-                    model_cfg["max_input_tokens"]
-                ),
+                max_input_tokens=max_input_tokens,
                 max_length=int(
                     model_cfg["max_summary_length"]
                 ),

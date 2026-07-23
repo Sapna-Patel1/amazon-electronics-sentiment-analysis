@@ -24,7 +24,10 @@ data:
   # Word budget per sentiment section in the combined-strategy input, so
   # right-side tokenizer truncation at generation time can't silently drop
   # an entire section (positive, always ordered last) for products with
-  # enough reviews to exceed the model's ~1024-token input limit.
+  # enough reviews to exceed the model's ~1024-token input limit. This is
+  # only an approximation of the actual token budget -- see
+  # generate_summaries() in model_runner.py for the ground-truth,
+  # token-level truncation check that covers both strategies.
   max_words_per_sentiment_section: 220
 
   # Validated at this scale (see outputs/description.md, README's

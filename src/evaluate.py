@@ -1,8 +1,9 @@
 """
-Evaluate a fine-tuned BERT sentiment classifier on the held-out test set.
+Evaluation metrics for both the BERT sentiment classifier and BART-generated
+review summaries.
 
-Loads the saved model from models/bert_sentiment_{baseline,weighted}/
-(whichever variant configs/bert_config.yaml's training.use_class_weights
+BERT: loads the saved model from models/bert_sentiment_{baseline,weighted}/
+(whichever variant configs/model_config.yaml's bert.training.use_class_weights
 currently selects), runs inference on the test split, and reports
 accuracy, precision, recall, F1 (macro/weighted/per-class), confusion
 matrix, and a full classification report. Results are saved to
@@ -10,15 +11,25 @@ outputs/bert_evaluation_{baseline,weighted}.{txt,json}, and a random
 10-row sample of predictions (review text, actual sentiment, predicted
 sentiment) is saved to outputs/bert_sample_predictions_{baseline,weighted}.csv.
 
+BART: evaluate_summaries(), create_strategy_comparison(), and
+save_evaluation_outputs() compute automatic diagnostics (ROUGE source
+coverage, compression ratio, lexical coverage, novelty ratio, repetition
+ratio, sentiment alignment) and blank manual-qualitative-scoring fields for
+BART-generated summaries. These are invoked from model_runner.py as part of
+the end-to-end BART pipeline rather than run standalone from this file.
+
 Usage:
     python src/evaluate.py
 """
 
 import json
+import re
+from collections import Counter
+from pathlib import Path
+
 import torch
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from transformers import AutoTokenizer, pipeline
 from sklearn.metrics import (
     accuracy_score,
@@ -180,9 +191,340 @@ def save_sample_predictions(
     return output
 
 
+# --- BART summary evaluation --------------------------------------------
+#
+# Because the Amazon dataset does not contain human-written reference
+# summaries, ROUGE is calculated against the source review text and is
+# reported as a source-coverage diagnostic, not as reference-summary ROUGE.
+# Human evaluation remains necessary for relevance, coherence, conciseness,
+# and pros/cons coverage.
+
+WORD_PATTERN = re.compile(r"[A-Za-z0-9']+")
+
+STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "been", "but",
+    "by", "for", "from", "had", "has", "have", "he", "her",
+    "his", "i", "in", "is", "it", "its", "of", "on", "or",
+    "our", "she", "that", "the", "their", "them", "they",
+    "this", "to", "was", "we", "were", "with", "you", "your",
+}
+
+
+def tokenize(text: str) -> list[str]:
+    """Convert text into lowercase word tokens."""
+    return WORD_PATTERN.findall(str(text).lower())
+
+
+def content_tokens(text: str) -> list[str]:
+    """Return non-stopword tokens."""
+    return [
+        token
+        for token in tokenize(text)
+        if token not in STOPWORDS and len(token) > 1
+    ]
+
+
+def lexical_coverage(source_words: set[str], summary_words: set[str]) -> float:
+    """Measure how much summary vocabulary appears in the source.
+
+    Args:
+        source_words: Content tokens (see content_tokens()) from the source text.
+        summary_words: Content tokens from the summary text.
+    """
+    if not summary_words:
+        return 0.0
+
+    return len(source_words & summary_words) / len(summary_words)
+
+
+def novelty_ratio(source_words: set[str], summary_words: set[str]) -> float:
+    """Measure summary vocabulary not copied from the source.
+
+    Args:
+        source_words: Content tokens (see content_tokens()) from the source text.
+        summary_words: Content tokens from the summary text.
+    """
+    if not summary_words:
+        return 0.0
+
+    return len(summary_words - source_words) / len(summary_words)
+
+
+def repetition_ratio(summary_words: list[str]) -> float:
+    """Measure repeated content words in the summary.
+
+    Args:
+        summary_words: Content tokens (see content_tokens()) from the summary text.
+    """
+    if not summary_words:
+        return 0.0
+
+    counts = Counter(summary_words)
+
+    repeated = sum(
+        count - 1
+        for count in counts.values()
+        if count > 1
+    )
+
+    return repeated / len(summary_words)
+
+
+def sentiment_alignment(
+    expected_sentiment: str,
+    compound_score: float,
+) -> float | None:
+    """Compare expected group sentiment with VADER summary sentiment."""
+    expected = str(expected_sentiment).lower()
+
+    if expected == "all":
+        return None
+
+    if compound_score >= 0.05:
+        predicted = "positive"
+    elif compound_score <= -0.05:
+        predicted = "negative"
+    else:
+        predicted = "neutral"
+
+    if predicted == expected:
+        return 1.0
+
+    if predicted == "neutral" or expected == "neutral":
+        return 0.5
+
+    return 0.0
+
+
+def evaluate_summaries(
+    results_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Calculate automatic diagnostics and create human-score fields."""
+    # Imported here rather than at module level so the BERT-only entry
+    # point (evaluate_model()/main()) doesn't pay for loading rouge_score
+    # (which transitively imports nltk) and vaderSentiment on every
+    # `python src/evaluate.py` run -- only this BART-side function needs them.
+    from rouge_score import rouge_scorer
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+    required_columns = {
+        "strategy",
+        "sentiment",
+        "combined_reviews",
+        "summary",
+    }
+
+    missing = required_columns - set(results_df.columns)
+
+    if missing:
+        raise ValueError(
+            f"Missing evaluation columns: {sorted(missing)}"
+        )
+
+    analyzer = SentimentIntensityAnalyzer()
+
+    rouge = rouge_scorer.RougeScorer(
+        ["rouge1", "rouge2", "rougeL"],
+        use_stemmer=True,
+    )
+
+    evaluated = results_df.copy()
+
+    source_counts = []
+    summary_counts = []
+    compression_ratios = []
+    lexical_coverages = []
+    novelty_ratios = []
+    repetition_ratios = []
+    source_sentiments = []
+    summary_sentiments = []
+    sentiment_alignments = []
+    rouge1_coverages = []
+    rouge2_coverages = []
+    rougeL_coverages = []
+
+    for _, row in evaluated.iterrows():
+        source = str(row["combined_reviews"])
+        summary = str(row["summary"])
+
+        source_count = len(tokenize(source))
+        summary_count = len(tokenize(summary))
+
+        # Computed once and reused across lexical_coverage/novelty_ratio/
+        # repetition_ratio below, rather than each of those independently
+        # re-running content_tokens() (regex tokenize + stopword filter)
+        # on the same source/summary strings.
+        summary_content_words = content_tokens(summary)
+        source_word_set = set(content_tokens(source))
+        summary_word_set = set(summary_content_words)
+
+        source_compound = analyzer.polarity_scores(
+            source
+        )["compound"]
+
+        summary_compound = analyzer.polarity_scores(
+            summary
+        )["compound"]
+
+        rouge_scores = rouge.score(
+            source,
+            summary,
+        )
+
+        source_counts.append(source_count)
+        summary_counts.append(summary_count)
+
+        compression_ratios.append(
+            summary_count / source_count
+            if source_count
+            else 0.0
+        )
+
+        lexical_coverages.append(
+            lexical_coverage(source_word_set, summary_word_set)
+        )
+
+        novelty_ratios.append(
+            novelty_ratio(source_word_set, summary_word_set)
+        )
+
+        repetition_ratios.append(
+            repetition_ratio(summary_content_words)
+        )
+
+        source_sentiments.append(source_compound)
+        summary_sentiments.append(summary_compound)
+
+        sentiment_alignments.append(
+            sentiment_alignment(
+                row["sentiment"],
+                summary_compound,
+            )
+        )
+
+        # Recall is used because this is source-coverage evaluation.
+        rouge1_coverages.append(
+            rouge_scores["rouge1"].recall
+        )
+
+        rouge2_coverages.append(
+            rouge_scores["rouge2"].recall
+        )
+
+        rougeL_coverages.append(
+            rouge_scores["rougeL"].recall
+        )
+
+    evaluated["source_word_count"] = source_counts
+    evaluated["summary_word_count"] = summary_counts
+    evaluated["compression_ratio"] = compression_ratios
+    evaluated["lexical_coverage"] = lexical_coverages
+    evaluated["novelty_ratio"] = novelty_ratios
+    evaluated["repetition_ratio"] = repetition_ratios
+    evaluated["source_vader_compound"] = source_sentiments
+    evaluated["summary_vader_compound"] = summary_sentiments
+    evaluated["sentiment_alignment"] = sentiment_alignments
+
+    evaluated["rouge1_source_coverage"] = rouge1_coverages
+    evaluated["rouge2_source_coverage"] = rouge2_coverages
+    evaluated["rougeL_source_coverage"] = rougeL_coverages
+
+    # Human evaluators enter scores from 1 to 5.
+    evaluated["manual_relevance_1_to_5"] = pd.NA
+    evaluated["manual_coherence_1_to_5"] = pd.NA
+    evaluated["manual_conciseness_1_to_5"] = pd.NA
+    evaluated["manual_pros_cons_coverage_1_to_5"] = pd.NA
+    evaluated["manual_notes"] = ""
+
+    return evaluated
+
+
+def create_strategy_comparison(
+    evaluation_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Create a presentation-ready comparison by strategy."""
+    metric_columns = [
+        "source_word_count",
+        "summary_word_count",
+        "compression_ratio",
+        "lexical_coverage",
+        "novelty_ratio",
+        "repetition_ratio",
+        "sentiment_alignment",
+        "rouge1_source_coverage",
+        "rouge2_source_coverage",
+        "rougeL_source_coverage",
+        "manual_relevance_1_to_5",
+        "manual_coherence_1_to_5",
+        "manual_conciseness_1_to_5",
+        "manual_pros_cons_coverage_1_to_5",
+    ]
+
+    available_metrics = [
+        column
+        for column in metric_columns
+        if column in evaluation_df.columns
+    ]
+
+    comparison = (
+        evaluation_df
+        .groupby("strategy", dropna=False)[available_metrics]
+        .mean(numeric_only=True)
+        .reset_index()
+    )
+
+    counts = (
+        evaluation_df
+        .groupby("strategy")
+        .size()
+        .rename("summary_count")
+        .reset_index()
+    )
+
+    return counts.merge(
+        comparison,
+        on="strategy",
+        how="left",
+    )
+
+
+def save_evaluation_outputs(
+    evaluation_df: pd.DataFrame,
+    comparison_df: pd.DataFrame,
+    evaluation_path: str,
+    comparison_path: str,
+) -> None:
+    """Save detailed and strategy-level results."""
+    evaluation_file = Path(evaluation_path)
+    comparison_file = Path(comparison_path)
+
+    evaluation_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    comparison_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    evaluation_df.to_csv(
+        evaluation_file,
+        index=False,
+    )
+
+    comparison_df.to_csv(
+        comparison_file,
+        index=False,
+    )
+
+    print(f"Evaluation saved to: {evaluation_file}")
+    print(f"Strategy comparison saved to: {comparison_file}")
+
+
 def main():
     """Load the trained model, evaluate on the test set, and save results."""
-    cfg = load_config()
+    cfg = load_config()["bert"]
     print(f"Loading test split from {cfg['data']['test_path']}...")
     test_df = load_processed_data(cfg["data"]["test_path"])
 

@@ -118,8 +118,7 @@ These labels are used for:
 amazon-electronics-sentiment-analysis/
 ├── configs/
 │   ├── data_config.yaml          # Sampling, split, and preprocessing settings
-│   ├── bert_config.yaml          # BERT hyperparameters and paths
-│   └── bart_config.yaml          # BART generation parameters and paths
+│   └── model_config.yaml         # BERT hyperparameters + BART generation params ("bert"/"bart" sections)
 │
 ├── data/
 │   ├── raw/
@@ -156,10 +155,9 @@ amazon-electronics-sentiment-analysis/
 │   ├── data_loader.py            # Sample raw review and metadata data
 │   ├── preprocess.py             # Clean, label, and split sampled data
 │   ├── train.py                  # BERT fine-tuning script
-│   ├── evaluate.py               # Accuracy, F1, and confusion matrix
+│   ├── evaluate.py               # BERT metrics (accuracy, F1, confusion matrix) + BART summary evaluation
 │   ├── model_runner.py           # BART summarization pipeline
 │   ├── summarizer.py             # BART summary generation
-│   ├── summary_evaluation.py     # BART summary evaluation
 │   └── utils/
 │       ├── __init__.py           # Configuration loading
 │       └── helpers.py            # Shared text cleaning and label mapping
@@ -178,7 +176,7 @@ amazon-electronics-sentiment-analysis/
 data/processed/preprocessed_reviews.csv
 ```
 
-- If the processed dataset is moved or renamed, the path in `configs/bart_config.yaml` must also be updated.
+- If the processed dataset is moved or renamed, the path in `configs/model_config.yaml`'s `bart.data.processed_path` must also be updated.
 
 ---
 
@@ -361,9 +359,11 @@ Contains configuration for the data sampling and preprocessing pipeline (`data_l
 - minimum review length (short reviews are dropped)
 - random seed
 
-### `bert_config.yaml`
+### `model_config.yaml`
 
-The BERT configuration file contains settings for sentiment classification, including:
+Both models' hyperparameters and paths live in this single file, under top-level `bert:` and `bart:` sections.
+
+**`bert:`** contains settings for sentiment classification, including:
 
 - Pretrained model name
 - Maximum sequence length
@@ -374,16 +374,11 @@ The BERT configuration file contains settings for sentiment classification, incl
 - Weight decay
 - Random seed
 - Dataset paths
-- Sentiment-label mapping
 - Model-checkpoint directory
 - Evaluation-output directory
 - Class-balancing parameters
 
----
-
-### `bart_config.yaml`
-
-The BART configuration file contains settings for review summarization, including:
+**`bart:`** contains settings for review summarization, including:
 
 - Pretrained summarization model
 - Processed dataset path
@@ -406,17 +401,18 @@ The BART configuration file contains settings for review summarization, includin
 - Evaluation-output path
 - Strategy-comparison path
 
-The current processed dataset path is:
+The current processed dataset path (used by both `bert.data` and `bart.data`) is:
 
 ```text
 data/processed/preprocessed_reviews.csv
 ```
 
-If the dataset is moved or renamed, update the following configuration value:
+If the dataset is moved or renamed, update the following configuration value under `bart:`:
 
 ```yaml
-data:
-  processed_path: data/processed/preprocessed_reviews.csv
+bart:
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
 ```
 
 ---
@@ -544,7 +540,7 @@ The training script:
 - Fine-tunes `bert-base-uncased`.
 - Predicts negative, neutral, or positive sentiment.
 - Applies configurable training hyperparameters.
-- Supports a class-balancing experiment (RQ2): setting `training.use_class_weights: true` in `bert_config.yaml` weights the loss function by inverse class frequency (via scikit-learn's `compute_class_weight(class_weight="balanced", ...)`, computed from the actual train-split label distribution), so mistakes on the minority neutral class are penalized more heavily during training.
+- Supports a class-balancing experiment (RQ2): setting `bert.training.use_class_weights: true` in `configs/model_config.yaml` weights the loss function by inverse class frequency (via scikit-learn's `compute_class_weight(class_weight="balanced", ...)`, computed from the actual train-split label distribution), so mistakes on the minority neutral class are penalized more heavily during training.
 - Saves the trained model checkpoint and tokenizer.
 
 Model checkpoints are saved under:
@@ -634,7 +630,7 @@ python src/model_runner.py
 
 The script performs the following steps automatically:
 
-1. Loads the processed review dataset specified in `configs/bart_config.yaml`.
+1. Loads the processed review dataset specified in `configs/model_config.yaml`'s `bart` section.
 2. Validates the required product, review, rating, and sentiment columns.
 3. Selects representative products.
 4. Groups reviews by product.
@@ -653,20 +649,20 @@ The pipeline requires no manual intervention after execution begins.
 
 ```text
 Loaded 48,252 reviews.
-Selected 5 products.
-Prepared 20 summary input documents.
+Selected 20 products.
+Prepared 80 summary input documents.
 
 Loading facebook/bart-large-cnn...
 BART model loaded.
 
-Generating 20 summaries...
+Generating 80 summaries...
 
 Summaries saved to: outputs/summary_samples.csv
 Evaluation saved to: outputs/summary_evaluation.csv
 Strategy comparison saved to: outputs/strategy_comparison.csv
 
 Pipeline completed.
-Successful summaries: 20
+Successful summaries: 80
 Failed summaries: 0
 ```
 
@@ -709,7 +705,7 @@ python src/model_runner.py
 The evaluation logic is implemented in:
 
 ```text
-src/summary_evaluation.py
+src/evaluate.py
 ```
 
 The module calculates:
@@ -802,16 +798,16 @@ and **60 sentiment-separated summaries**, with no generation failures.
 |     Summaries generated    |    20    |          60        |
 |     Successful summaries   |    20    |          60         |
 |      Failed summaries      |     0    |           0         |
-|  Average source word count |   1682.3 |        558.77       |
-| Average summary word count |   46.25  |         40.18       |
-|      Compression ratio     |   0.0300 |        0.0917       |
-|       Lexical coverage     |   97.17% |        96.44%       |
-|        Novelty ratio       |    2.83% |         3.56%       |
-|      Repetition ratio      |    7.99% |         9.28%       |
-|     Sentiment alignment    |    N/A   |        68.33%       |
-|  ROUGE-1 source coverage   |   0.0297 |        0.0908       |
-|  ROUGE-2 source coverage   |   0.0260 |        0.0771       |
-|  ROUGE-L source coverage   |   0.0275 |        0.0672       |
+|  Average source word count |   672.65 |        370.22       |
+| Average summary word count |   42.15  |         39.13       |
+|      Compression ratio     |   0.0625 |        0.1111       |
+|       Lexical coverage     |   97.59% |        96.11%       |
+|        Novelty ratio       |    2.41% |         3.89%       |
+|      Repetition ratio      |    7.91% |         8.49%       |
+|     Sentiment alignment    |    N/A   |        69.17%       |
+|  ROUGE-1 source coverage   |   0.0620 |        0.1096       |
+|  ROUGE-2 source coverage   |   0.0551 |        0.0938       |
+|  ROUGE-L source coverage   |   0.0580 |        0.1036       |
 
 The pipeline successfully generated all **80 summaries** without any failed
 model calls.
@@ -820,6 +816,23 @@ The combined-review strategy produced broader product-level overviews by
 integrating customer opinions from all sentiment categories. In contrast, the
 sentiment-separated strategy generated more focused summaries that clearly
 distinguished positive, neutral, and negative customer experiences.
+
+**Note on these numbers:** both strategies' numbers reflect fixes to a
+truncation bug. The combined-strategy input (built by concatenating
+negative, then neutral, then positive review sections) could silently drop
+the positive section entirely for any product whose combined text exceeded
+BART's ~1024-token input limit -- verified against 18 of the 20 products in
+an earlier run -- fixed by capping each sentiment section to a bounded word
+budget before concatenation, which is why its average source word count
+dropped substantially (was 1682.3 words) and ROUGE source-coverage roughly
+doubled. A follow-up review then found the sentiment-separated strategy had
+the *same* class of bug -- no truncation was applied to it at all, and 9 of
+60 rows in an earlier run actually exceeded the 1024-token limit (up to
+1988 tokens, nearly 2x over) -- fixed the same way with its own word budget.
+That's why its average source word count also dropped (was 562.15 words)
+and its ROUGE/compression numbers moved up in this latest run. In both
+cases, the input is now bounded to what BART actually processes, so the
+summary covers a larger share of it.
 
 Overall, the expanded evaluation showed that sentiment-separated summaries
 achieved higher source coverage (ROUGE), greater novelty, and better separation
@@ -876,6 +889,7 @@ The current implementation has several limitations.
 - `src/train.py` sets `training.seed` but does not force full determinism (`TrainingArguments(full_determinism=True)`), and `fp16` mixed precision is auto-enabled on any CUDA GPU. As a result, two runs with the same `seed: 42` on a GPU are not bit-for-bit reproducible — re-running `experiments/bert_class_balancing.ipynb` will land close to, but not exactly on, the numbers in [Preliminary BERT Results](#preliminary-bert-results) (observed drift so far: accuracy within ~0.2 percentage points, neutral-class F1/recall deltas varying by roughly 2x run to run). The qualitative conclusion (class weighting helps the neutral class at some cost elsewhere) has held across runs; the exact decimal values and the size of the accuracy/precision trade-off have not.
 - `facebook/bart-large-cnn` supports a maximum input length of approximately 1,024 tokens.
 - Large product-review groups must therefore be filtered, prioritized, or truncated.
+- Both BART strategies now cap their input to a word budget (`max_words_per_sentiment_section`, `max_words_per_separated_group` in `configs/model_config.yaml`) to keep review sections from silently exceeding the 1,024-token limit. This budget is only an approximation of the true token limit (word count and token count aren't equivalent — spec/price-heavy review text can tokenize well above the ~1.3 tokens/word assumed), so it substantially reduces but does not fully guarantee eliminating truncation risk. A ground-truth token-count check (in `generate_summaries()`) warns whenever the tokenizer will actually truncate a given row, so any residual case is at least surfaced in the console output rather than passing silently.
 - Helpful-vote prioritization may exclude less popular but still relevant observations.
 - The current grouping strategy uses sentiment labels derived from star ratings.
 - The current BART grouping strategy uses star-rating-derived sentiment labels rather than predictions from the completed fine-tuned BERT classifier.
@@ -916,10 +930,10 @@ To reproduce the current BART outputs:
 data/processed/preprocessed_reviews.csv
 ```
 
-5. Confirm the same path is listed in:
+5. Confirm the same path is listed under `bart.data.processed_path` in:
 
 ```text
-configs/bart_config.yaml
+configs/model_config.yaml
 ```
 
 6. Run:
@@ -1022,11 +1036,12 @@ Confirm that the current file exists:
 data/processed/preprocessed_reviews.csv
 ```
 
-Then verify that `configs/bart_config.yaml` contains:
+Then verify that `configs/model_config.yaml` contains:
 
 ```yaml
-data:
-  processed_path: data/processed/preprocessed_reviews.csv
+bart:
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
 ```
 
 ---
@@ -1049,7 +1064,7 @@ Using device: cpu
 
 This is expected because `facebook/bart-large-cnn` is a large transformer model.
 
-Reducing the number of products or reviews per group in `configs/bart_config.yaml` can reduce runtime during testing.
+Reducing the number of products or reviews per group in `configs/model_config.yaml`'s `bart` section can reduce runtime during testing.
 
 ---
 
@@ -1082,10 +1097,10 @@ The `docs/` directory contains supporting project documentation, including:
 
 The BART summarization contribution includes:
 
-- `configs/bart_config.yaml`
+- `configs/model_config.yaml`'s `bart` section
 - `src/summarizer.py`
 - `src/model_runner.py`
-- `src/summary_evaluation.py`
+- BART evaluation functions in `src/evaluate.py`
 - Product-level review grouping
 - Sentiment-separated review grouping
 - BART model loading
@@ -1109,6 +1124,16 @@ Each summary was evaluated using four qualitative criteria:
 - Pros/Cons Coverage – Does the summary represent the major strengths and weaknesses mentioned by reviewers?
 
 Scores were assigned on a five-point scale (1 = Poor, 5 = Excellent).
+
+**Note:** these scores were assigned against an earlier generation run, before
+the combined-strategy truncation-bias fix described in
+[Preliminary BART Results](#preliminary-bart-results) (that fix changed
+which content the combined-strategy summaries were built from — previously
+the positive-sentiment section was silently dropped for most products).
+The scores below have not yet been re-assigned against the current,
+regenerated `outputs/summary_samples.csv`, so treat the **Combined Reviews**
+row as pending re-evaluation; **Sentiment-Separated** was unaffected by the
+fix and its scores remain valid.
 
 |        Strategy      | Relevance | Coherence | Conciseness | Pros/Cons Coverage |
 |----------------------|:---------:|:---------:|:-----------:|:------------------:|

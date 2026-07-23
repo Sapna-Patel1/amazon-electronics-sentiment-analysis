@@ -3,7 +3,7 @@
 import yaml
 
 
-def load_config(path: str = "configs/bert_config.yaml") -> dict:
+def load_config(path: str = "configs/model_config.yaml") -> dict:
     """Load pipeline configuration from a YAML file.
 
     Args:

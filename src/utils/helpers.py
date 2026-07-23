@@ -79,37 +79,64 @@ def split_data(
         Tuple of (train_df, val_df, test_df), each reset-indexed.
 
     Raises:
-        ValueError: If any class in df["label"] has too few members to be
+        ValueError: If train_size + val_size >= 1.0 (leaves no room for a
+            test split), or if any class in df["label"] is too small to be
             stratified across all three splits.
     """
-    class_counts = df["label"].value_counts()
-    too_small = class_counts[class_counts < 3]
-    if not too_small.empty:
+    if train_size + val_size >= 1.0:
         raise ValueError(
+            f"train_size ({train_size}) + val_size ({val_size}) must be "
+            "less than 1.0 so a non-empty test split remains."
+        )
+
+    # No fixed per-class row-count threshold can catch every failure mode
+    # up front: sklearn's proportional rounding across the two chained
+    # stratified splits below can still round a class down to a single row
+    # when multiple classes are simultaneously small, even if each one
+    # individually clears a naive ">= N rows" guard (verified: a
+    # 5-rows/5-rows/100-rows class split fails on every seed tested, despite
+    # each small class clearing a ">= 5" check on its own). So instead of
+    # guessing a "big enough" threshold, the actual split is attempted and
+    # any resulting failure is caught and re-raised with the same clear
+    # guidance, rather than letting sklearn's more opaque error surface
+    # directly. The train_size/val_size guard above keeps this except
+    # block scoped to genuine stratification failures, rather than also
+    # catching (and mislabeling) an invalid split-ratio configuration.
+    class_counts = df["label"].value_counts()
+
+    def stratification_error(cause: Exception) -> ValueError:
+        return ValueError(
             "Cannot create a stratified train/validation/test split: "
-            f"label(s) {too_small.index.tolist()} have fewer than 3 rows "
-            f"(counts: {too_small.to_dict()}). Increase the sample size or "
-            "relax upstream filters (e.g. min_review_length) so every class "
-            "has enough rows to appear in all three splits."
+            "one or more classes are too small for this split ratio "
+            f"(class counts: {class_counts.to_dict()}). Increase the "
+            "sample size or relax upstream filters (e.g. min_review_length) "
+            f"so every class has enough rows to appear in all three splits. "
+            f"Underlying error: {cause}"
         )
 
     test_size = 1.0 - train_size - val_size
 
-    train_df, temp_df = train_test_split(
-        df,
-        test_size=(val_size + test_size),
-        random_state=seed,
-        stratify=df["label"]
-    )
+    try:
+        train_df, temp_df = train_test_split(
+            df,
+            test_size=(val_size + test_size),
+            random_state=seed,
+            stratify=df["label"]
+        )
+    except ValueError as exc:
+        raise stratification_error(exc) from exc
 
     relative_val = val_size / (val_size + test_size)
 
-    val_df, test_df = train_test_split(
-        temp_df,
-        test_size=(1.0 - relative_val),
-        random_state=seed,
-        stratify=temp_df["label"]
-    )
+    try:
+        val_df, test_df = train_test_split(
+            temp_df,
+            test_size=(1.0 - relative_val),
+            random_state=seed,
+            stratify=temp_df["label"]
+        )
+    except ValueError as exc:
+        raise stratification_error(exc) from exc
 
     return (
         train_df.reset_index(drop=True),

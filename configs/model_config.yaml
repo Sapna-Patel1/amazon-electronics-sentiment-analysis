@@ -1,0 +1,80 @@
+bert:
+  model:
+    name: bert-base-uncased
+    num_labels: 3
+    max_length: 256
+
+  training:
+    learning_rate: 2.0e-5
+    batch_size: 16
+    num_epochs: 3
+    warmup_steps: 500
+    weight_decay: 0.01
+    seed: 42
+    # RQ2 class-balancing experiment: when true, the loss is weighted by
+    # inverse class frequency (computed from the train split at runtime).
+    # Run once with this false (baseline) and once true (weighted), then
+    # compare neutral-class F1/recall between the two runs.
+    use_class_weights: false
+
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
+    train_path: data/processed/train.csv
+    val_path: data/processed/validation.csv
+    test_path: data/processed/test.csv
+
+  outputs:
+    model_dir: models/bert_sentiment
+    results_dir: outputs/
+    num_sample_predictions: 10
+
+bart:
+  model:
+    name: facebook/bart-large-cnn
+    max_input_tokens: 1024
+    max_summary_length: 130
+    min_summary_length: 30
+    num_beams: 4
+    length_penalty: 2.0
+    no_repeat_ngram_size: 3
+
+  data:
+    processed_path: data/processed/preprocessed_reviews.csv
+    product_column: parent_asin
+    product_title_column: product_title
+    review_title_column: review_title
+    review_text_column: text
+    rating_column: rating
+    sentiment_column: sentiment
+    input_text_column: input_text
+    helpful_vote_column: helpful_vote
+
+    # Reviews included per sentiment group.
+    reviews_per_group: 3
+
+    # Word budget per sentiment section in the combined-strategy input, so
+    # right-side tokenizer truncation at generation time can't silently drop
+    # an entire section (positive, always ordered last) for products with
+    # enough reviews to exceed the model's ~1024-token input limit. This is
+    # only an approximation of the actual token budget -- see
+    # generate_summaries() in model_runner.py for the ground-truth,
+    # token-level truncation check that covers both strategies.
+    max_words_per_sentiment_section: 220
+
+    # Word budget for the sentiment-separated strategy's single-sentiment
+    # input. Larger than max_words_per_sentiment_section above since this
+    # strategy has one section per row (no concatenation competing for the
+    # same token budget), but still capped -- verified 9 of 60
+    # sentiment-separated rows exceeded 1024 tokens with no cap at all.
+    # Sized with margin for spec-heavy review text (product numbers,
+    # prices, ratings) tokenizing well above the ~1.3 tokens/word average.
+    max_words_per_separated_group: 400
+
+    # Validated at this scale (see outputs/description.md, README's
+    # "Preliminary BART Results"). Reduce for a quick local smoke test.
+    sample_products: 20
+
+  outputs:
+    summary_path: outputs/summary_samples.csv
+    evaluation_path: outputs/summary_evaluation.csv
+    comparison_path: outputs/strategy_comparison.csv

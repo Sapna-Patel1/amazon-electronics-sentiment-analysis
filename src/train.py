@@ -3,7 +3,7 @@ Fine-tune BERT for 3-class sentiment classification.
 
 Loads the processed reviews dataset, tokenizes inputs, and fine-tunes
 bert-base-uncased using the Hugging Face Trainer API. Hyperparameters
-and paths are read from configs/bert_config.yaml.
+and paths are read from configs/model_config.yaml's "bert" section.
 
 Usage:
     python src/train.py
@@ -104,7 +104,7 @@ def compute_metrics(eval_pred) -> dict:
 
 def main():
     """Run the full BERT fine-tuning pipeline and save the trained model."""
-    cfg = load_config()
+    cfg = load_config()["bert"]
     model_name = cfg["model"]["name"]
     max_length = cfg["model"]["max_length"]
     t = cfg["training"]
